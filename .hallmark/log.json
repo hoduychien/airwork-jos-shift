@@ -1,0 +1,36 @@
+[
+  {
+    "date": "2026-09-04",
+    "scope": "app",
+    "macrostructure": "Workbench (app) · hero H2 Split (auth)",
+    "theme": "studied-DNA",
+    "source": "https://www.together.ai/",
+    "theme_axes": "light / geometric-grotesk / warm",
+    "enrichment": "Tier-A CSS art (auth visual)",
+    "nav": "N1b top bar",
+    "footer": "none",
+    "brief": "Ca Kip · ap DNA together.ai (Manrope + JetBrains Mono, ink buttons, orange accent)"
+  },
+  {
+    "date": "2026-09-04",
+    "scope": "app",
+    "macrostructure": "Console (Index-First variant)",
+    "theme": "custom",
+    "theme_axes": "light / grotesk-sans / neutral",
+    "vibe": "bang dieu khien truc ca, day, mono, nen sang",
+    "enrichment": "none",
+    "nav": "N1b top bar",
+    "footer": "none",
+    "brief": "Ca Kip · rebuild toan bo UI (design.md)"
+  },
+  {
+    "date": "2026-09-04",
+    "scope": "app",
+    "macrostructure": "Workbench",
+    "theme": "Cobalt",
+    "enrichment": "none",
+    "nav": "N3 side-rail",
+    "footer": "none",
+    "brief": "Ca Kip · redesign bo cuc app chia ca"
+  }
+]

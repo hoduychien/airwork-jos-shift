@@ -1,0 +1,100 @@
+/* Hallmark · macrostructure: Workbench (app) · theme: studied-DNA (source: url)
+ * source-url: https://www.together.ai/ · studied: yes · DNA-source: url
+ * observed-fonts: The Future + PP Neue Montreal Mono (commercial) → substitutes: Manrope + JetBrains Mono (Vietnamese)
+ * observed-paper: #fff · observed-ink: #000 · observed-accent: #fc4c02 (orange) · primary = orange (user request), ink for text
+ * product palette: purple #caaef5 · cyan #70e9f0 · blue #9bcdf5 · pink #f7b0df · orange #febea3 (card tints)
+ * rhythm: unknown (URL mode) · pre-emit critique: P4 H5 E5 S5 R4 V4
+ * shift-cell colors stay spec-mandated Excel hexes (mirrored in the .xlsx export)
+ */
+:root {
+  /* paper + ink — trắng tinh, mực đen (DNA) */
+  --color-paper: oklch(99.2% 0 0);
+  --color-paper-2: oklch(96.5% 0.003 250);
+  --color-paper-3: oklch(92.5% 0.004 250);
+  --color-surface: oklch(100% 0 0);
+  --color-ink: oklch(12% 0 0);
+  --color-ink-2: oklch(40% 0.005 250);
+  --color-ink-3: oklch(60% 0.006 250);
+  --color-line: oklch(90% 0.004 250);
+  --color-line-strong: oklch(80% 0.006 250);
+  /* nền tối (DNA: #010120) cho khối tuyên bố / nền đăng nhập */
+  --color-ink-deep: oklch(15% 0.06 280);
+
+  /* màu chủ đạo = cam thương hiệu (#fc4c02) tối nhẹ để chữ trắng đạt ≥ 4.5:1; nút phụ = đen 8% */
+  --color-accent: oklch(58% 0.2 38);
+  --color-accent-hover: oklch(52% 0.2 38);
+  --color-accent-soft: oklch(0% 0 0 / 0.08);
+  --color-accent-ink: oklch(100% 0 0);
+  --color-signal: oklch(66% 0.22 40);
+  --color-signal-soft: oklch(95% 0.05 50);
+  --color-focus: oklch(66% 0.22 40);
+
+  /* bảng màu sản phẩm (DNA) — nền thẻ, chip, khối hình đăng nhập */
+  --color-tint-purple: oklch(82% 0.09 300);
+  --color-tint-cyan: oklch(88% 0.11 200);
+  --color-tint-blue: oklch(84% 0.08 240);
+  --color-tint-pink: oklch(84% 0.11 340);
+  --color-tint-orange: oklch(85% 0.09 50);
+  --color-tint-purple-soft: oklch(94% 0.03 300);
+  --color-tint-cyan-soft: oklch(96% 0.04 200);
+  --color-tint-blue-soft: oklch(94% 0.03 240);
+  --color-tint-pink-soft: oklch(96% 0.03 340);
+  --color-tint-orange-soft: oklch(96% 0.03 50);
+
+  /* status */
+  --color-danger: oklch(55% 0.2 27);
+  --color-danger-soft: oklch(95% 0.03 27);
+  --color-ok: oklch(52% 0.14 152);
+  --color-ok-soft: oklch(94.5% 0.05 152);
+  --color-warn: oklch(72% 0.15 75);
+  --color-warn-soft: oklch(95% 0.06 85);
+  --color-warn-ink: oklch(42% 0.1 75);
+
+  /* shift-cell colors — bắt buộc theo file Excel nghiệp vụ */
+  --shift-s1: #ffff00;
+  --shift-s1-ink: oklch(35% 0.05 100);
+  --shift-s2: #92d050;
+  --shift-s2-ink: oklch(30% 0.06 140);
+  --shift-s3: #ed7d31;
+  --shift-s3-ink: oklch(22% 0.05 50);
+  --shift-off: oklch(95% 0.002 250);
+  --shift-off-ink: oklch(62% 0.01 250);
+  --weekend-head: oklch(94% 0.06 95);
+
+  /* type — grotesk hình học tracking âm + mono nhãn (vai trò DNA) */
+  --font-display: 'Manrope', 'Segoe UI', system-ui, sans-serif;
+  --font-body: 'Manrope', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Consolas', ui-monospace, monospace;
+
+  --text-2xs: 0.66rem;
+  --text-xs: 0.72rem;
+  --text-sm: 0.82rem;
+  --text-base: 0.92rem;
+  --text-md: 1.05rem;
+  --text-lg: 1.3rem;
+  --text-xl: 1.7rem;
+  --text-2xl: 2.5rem;
+
+  /* space — 4pt */
+  --space-2xs: 0.25rem;
+  --space-xs: 0.5rem;
+  --space-sm: 0.75rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2.25rem;
+  --space-2xl: 3.5rem;
+
+  /* motion — DNA dùng 450ms cubic-bezier(.215,.61,.355,1) cho màu nút */
+  --ease-out: cubic-bezier(0.215, 0.61, 0.355, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 150ms;
+  --dur-base: 260ms;
+
+  /* misc — DNA radius 4/8/12/16 */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --rule: 1px solid var(--color-line);
+  --rule-strong: 1px solid var(--color-line-strong);
+  --shadow-pop: 0 8px 24px oklch(20% 0.02 250 / 0.14), 0 1px 3px oklch(20% 0.02 250 / 0.1);
+}
