@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useLayoutEffect, useRef, type ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
 import { isLocalMode } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
@@ -16,10 +16,22 @@ export default function Layout({ children }: { children: ReactNode }) {
   const { user, isAdmin, logout } = useAuth()
   const nav = NAV.filter((item) => !item.adminOnly || isAdmin)
   const initials = (user?.username ?? '?').slice(0, 2).toUpperCase()
+  const topbarRef = useRef<HTMLElement>(null)
+
+  // Ghi chiều cao thanh trên vào biến CSS để tiêu đề trang (.page-head) dính ngay bên dưới khi cuộn
+  useLayoutEffect(() => {
+    const el = topbarRef.current
+    if (!el) return
+    const apply = () => document.documentElement.style.setProperty('--topbar-h', `${el.offsetHeight}px`)
+    apply()
+    const ro = new ResizeObserver(apply)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   return (
     <div className="min-h-dvh">
-      <header className="topbar">
+      <header className="topbar" ref={topbarRef}>
         {isLocalMode && <div className="demo-strip">Chế độ demo · dữ liệu lưu trên trình duyệt này</div>}
         <div className="topbar-inner">
           <NavLink to="/" className="wordmark" aria-label="Airwork JOS Shift — về bảng lịch">

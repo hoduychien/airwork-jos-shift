@@ -159,12 +159,13 @@
 
 /* ---------- main & page ---------- */
 .main {
+  --main-pad: var(--space-md);
   min-width: 0;
-  padding: var(--space-md) var(--space-md) var(--space-2xl);
+  padding: var(--main-pad) var(--main-pad) var(--space-2xl);
 }
 @media (min-width: 768px) {
   .main {
-    padding: var(--space-lg) var(--space-lg) var(--space-2xl);
+    --main-pad: var(--space-lg);
   }
 }
 .page {
@@ -176,8 +177,15 @@
   max-width: 56rem;
 }
 
-/* ---------- page header — dải mỏng, kẻ đậm ---------- */
+/* ---------- page header — dải mỏng, kẻ đậm; dính ngay dưới thanh trên khi cuộn ---------- */
 .page-head {
+  position: sticky;
+  top: var(--topbar-h, 3rem);
+  z-index: 20;
+  background: var(--color-paper);
+  /* kéo lên bù phần đệm trên của .main để không hở khe giữa thanh trên và tiêu đề */
+  margin-top: calc(-1 * var(--main-pad, var(--space-md)));
+  padding-top: var(--main-pad, var(--space-md));
   display: flex;
   flex-wrap: wrap;
   align-items: center;
