@@ -36,7 +36,11 @@ realtime).
   trước" (Supabase: bảng `employee_month_settings`, migration 004).
 - Draft → **Publish**; giữ lịch sử các tháng cũ; **Supabase Realtime** đồng bộ
   live khi admin chỉnh tay.
-- **Đăng nhập & phân quyền**: chỉ tài khoản **admin** mới được xếp lịch, chỉnh
+- **Vai trò PM**: toàn quyền như admin nhưng không nằm trong danh sách nhân viên
+  làm ca nên không bao giờ bị xếp ca. Tạo trong trang Nhân viên (mục "Tài khoản
+  PM"); chế độ Supabase cần chạy `migrations/005_pm_role.sql` và `006_pm_only_edits_pm.sql`.
+  Admin tạo được PM nhưng không sửa được tài khoản PM (đổi vai trò, đặt lại mật khẩu) — chỉ PM mới làm được.
+- **Đăng nhập & phân quyền**: chỉ tài khoản **admin / PM** mới được xếp lịch, chỉnh
   ô, publish, quản lý nhân viên và cài đặt; thành viên chỉ xem lịch đã chốt.
   Chế độ demo: tài khoản = mã nhân viên (gõ `ChienHD` hoặc `ChienHD2` đều
   được), mật khẩu ban đầu `123456`, bắt buộc đổi mật khẩu ở lần đăng nhập
@@ -70,6 +74,8 @@ Mở http://localhost:5173 — dữ liệu mẫu gồm 9 nhân viên (2 người
 2. Mở **SQL Editor**, chạy lần lượt:
    - `supabase/migrations/001_init.sql` (schema + RLS + realtime)
    - `supabase/migrations/003_admin_accounts.sql` (hàm quản lý tài khoản cho admin)
+   - `supabase/migrations/005_pm_role.sql` (vai trò PM — quản lý, không xếp ca)
+   - `supabase/migrations/006_pm_only_edits_pm.sql` (chỉ PM mới sửa được tài khoản PM)
    - `supabase/migrations/004_employee_month_settings.sql` (ràng buộc ca theo tháng)
    - `supabase/seed.sql` (9 nhân viên mẫu)
 3. **Authentication → Providers → Email**: bật Email provider, **tắt** "Confirm

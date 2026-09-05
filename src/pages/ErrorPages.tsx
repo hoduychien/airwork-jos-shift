@@ -1,6 +1,7 @@
 import { Component, useState, type ErrorInfo, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
+import { ROLE_LABELS } from '../lib/auth'
 
 /* Hallmark · component: error-screen · theme: custom "Console"
  * Một mẫu cho mọi mã lỗi: dòng mono đầu panel, mã lỗi lớn, tiêu đề, giải thích, hành động.
@@ -116,8 +117,8 @@ export function ForbiddenPage() {
       title="Bạn không có quyền vào trang này"
       message={
         <>
-          Trang này chỉ dành cho <strong>admin</strong>. Tài khoản <strong>{user?.username}</strong> đang ở vai trò{' '}
-          {user?.role === 'admin' ? 'admin' : 'thành viên'}. Nếu bạn cần quyền, nhờ admin đổi vai trò trong Cài đặt.
+          Trang này chỉ dành cho <strong>admin / PM</strong>. Tài khoản <strong>{user?.username}</strong> đang ở vai trò{' '}
+          {user ? ROLE_LABELS[user.role].toLowerCase() : 'thành viên'}. Nếu bạn cần quyền, nhờ admin đổi vai trò trong Nhân viên.
         </>
       }
       actions={

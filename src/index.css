@@ -381,7 +381,7 @@ input[type='number'] {
   background: var(--color-paper-2);
 }
 .filter-chip[aria-pressed='true'] {
-  background: var(--color-ink);
+  background: var(--color-accent);
   color: var(--color-accent-ink);
 }
 .search {
@@ -396,7 +396,7 @@ input[type='number'] {
   color: var(--color-ink-3);
 }
 .search:focus-within {
-  border-color: var(--color-ink);
+  border-color: var(--color-accent);
 }
 .search input::placeholder {
   color: var(--color-ink-3);

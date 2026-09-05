@@ -1,12 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { supabase } from './supabase'
-import { authMode, localAuth, supabaseAuth, type AuthUser } from './auth'
+import { authMode, canManage, localAuth, supabaseAuth, type AuthUser } from './auth'
 
 interface AuthContextValue {
   user: AuthUser | null
   ready: boolean
   /** lỗi khi tải phiên đăng nhập / vai trò (vd. Supabase không phản hồi) → màn 503 */
   loadError: unknown
+  /** admin hoặc PM — cùng quyền quản lý */
   isAdmin: boolean
   /** demo: mã nhân viên + mật khẩu · Supabase: email + mật khẩu */
   login(username: string, password: string): Promise<void>
@@ -46,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       ready,
       loadError,
-      isAdmin: user?.role === 'admin',
+      isAdmin: canManage(user?.role),
       async login(username, password) {
         if (authMode === 'local') {
           const u = await localAuth.login(username, password)

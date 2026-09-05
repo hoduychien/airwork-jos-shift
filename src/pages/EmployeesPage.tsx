@@ -4,7 +4,7 @@ import PageHeader from '../components/PageHeader'
 import { Busy, LoadingBar, TableSkeleton } from '../components/Loading'
 import { store } from '../lib/store'
 import { ACCOUNT_EMAIL_DOMAIN, accountsApi, type AccountInfo } from '../lib/accounts'
-import { DEFAULT_PASSWORD, authMode, type Role } from '../lib/auth'
+import { DEFAULT_PASSWORD, ROLES, ROLE_LABELS, authMode, canEditAccount, type Role } from '../lib/auth'
 import { useAuth } from '../lib/AuthContext'
 import { useFeedback } from '../components/Feedback'
 import type { Employee } from '../lib/types'
@@ -86,14 +86,30 @@ export default function EmployeesPage() {
   }
   const accountFor = (e: Employee) => accounts.find((a) => a.employeeId === e.id)
   const isMe = (a: AccountInfo) => a.id === user?.id || a.username === user?.username
+  /** tài khoản PM chỉ PM mới sửa được; admin chỉ xem */
+  const canEdit = (a: AccountInfo) => canEditAccount(user?.role, a.role)
+  const lockTitle = 'Chỉ PM mới được sửa tài khoản PM'
+  const roleOptions = ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r] }))
   const setRole = (a: AccountInfo, role: Role) =>
     runAcc(
       async () => {
         await accountsApi.setRole(a.id, role)
         if (isMe(a)) await refresh()
       },
-      `Đã đổi vai trò ${a.username} → ${role === 'admin' ? 'Admin' : 'Thành viên'}.`,
+      role === 'pm' && a.employeeId
+        ? `Đã đổi ${a.username} → PM và bỏ gắn nhân viên — PM không được xếp ca.`
+        : `Đã đổi vai trò ${a.username} → ${ROLE_LABELS[role]}.`,
     )
+  /** tạo tài khoản PM từ form nhân viên (checkbox "Tạo tài khoản PM") — không tạo nhân viên, không xếp ca */
+  const createPm = (code: string) => {
+    const login = authMode === 'local' ? code.trim() : accountsApi.loginFor(code)
+    setEditing(null)
+    return runAcc(
+      () => accountsApi.createManagerAccount(login, 'pm'),
+      `Đã tạo tài khoản PM ${login} (mật khẩu ${DEFAULT_PASSWORD}). PM có toàn quyền admin, không xếp ca.`,
+    )
+  }
+  const pmAccounts = accounts.filter((a) => a.role === 'pm')
   const resetPassword = async (a: AccountInfo) => {
     const ok = await confirm({
       title: `Đặt lại mật khẩu của ${a.username}?`,
@@ -118,7 +134,7 @@ export default function EmployeesPage() {
       if (isMe(a)) await refresh()
     }, `Đã gắn ${a.username} với nhân viên.`)
   const employeeIds = new Set(employees.map((e) => e.id))
-  const unlinked = accounts.filter((a) => !a.employeeId || !employeeIds.has(a.employeeId))
+  const unlinked = accounts.filter((a) => a.role !== 'pm' && (!a.employeeId || !employeeIds.has(a.employeeId)))
   const missingCount = employees.filter((e) => !accountFor(e) && e.code.trim()).length
 
   useEffect(() => {
@@ -132,7 +148,15 @@ export default function EmployeesPage() {
       // nhân viên mới lấy ràng buộc vừa nhập làm mặc định, nhân viên cũ giữ nguyên mặc định
       const base = baseEmployees.find((b) => b.id === e.id)
       await store.upsertEmployee(
-        base ? { ...base, name: e.name, code: e.code, display_order: e.display_order, active: e.active } : e,
+        base
+          ? {
+              ...base,
+              name: e.name,
+              code: e.code,
+              display_order: e.display_order,
+              active: e.active,
+            }
+          : e,
       )
       // ràng buộc ca của THÁNG đang chọn
       await store.saveMonthPrefs(e.id, month, year, prefsOf(e))
@@ -224,7 +248,11 @@ export default function EmployeesPage() {
 
   const prefChips = (e: Employee) => {
     const chips: { label: string; tone: string }[] = []
-    if (e.prefer_night) chips.push({ label: `Ưu tiên đêm ≥${e.min_night_shifts}`, tone: 'chip-accent' })
+    if (e.prefer_night)
+      chips.push({
+        label: `Ưu tiên đêm ≥${e.min_night_shifts}`,
+        tone: 'chip-accent',
+      })
     if (e.no_s1) chips.push({ label: 'Không S1', tone: '' })
     if (e.no_s2) chips.push({ label: 'Không S2', tone: '' })
     if (e.no_s3) chips.push({ label: 'Không S3', tone: '' })
@@ -280,7 +308,10 @@ export default function EmployeesPage() {
         <AppSelect
           aria-label="Tháng"
           width="8.75rem"
-          options={Array.from({ length: 12 }, (_, i) => i + 1).map((m) => ({ value: m, label: `Tháng ${m}` }))}
+          options={Array.from({ length: 12 }, (_, i) => i + 1).map((m) => ({
+            value: m,
+            label: `Tháng ${m}`,
+          }))}
           value={month}
           onChange={setMonth}
         />
@@ -302,7 +333,10 @@ export default function EmployeesPage() {
             {accError}
           </span>
         )}
-        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-ink-3)' }}>{employees.length} người</span>
+        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-ink-3)' }}>
+          {employees.length} nhân viên
+          {pmAccounts.length > 0 ? ` · ${pmAccounts.length} PM` : ''}
+        </span>
       </div>
 
       {loading && employees.length === 0 ? (
@@ -324,13 +358,95 @@ export default function EmployeesPage() {
                 </tr>
               </thead>
               <tbody>
+                {pmAccounts.map((a) => (
+                  <tr key={`pm-${a.id}`}>
+                    <td />
+                    <td>
+                      <span className="flex items-center gap-2">
+                        <span className="avatar-sm">{a.username.slice(0, 2).toUpperCase()}</span>
+                        <span className="min-w-0">
+                          <span
+                            style={{
+                              display: 'block',
+                              fontFamily: 'var(--font-display)',
+                              fontWeight: 600,
+                              lineHeight: 1.2,
+                            }}
+                          >
+                            {a.username}
+                          </span>
+                          <span
+                            className="mono"
+                            style={{
+                              fontSize: 'var(--text-xs)',
+                              color: 'var(--color-ink-3)',
+                            }}
+                          >
+                            PM · quản lý
+                          </span>
+                        </span>
+                      </span>
+                    </td>
+                    <td>
+                      <span className="chip" title="PM không nằm trong danh sách làm ca">
+                        Không xếp ca
+                      </span>
+                    </td>
+                    <td style={{ color: 'var(--color-ink-3)' }}>—</td>
+                    <td className="num" style={{ color: 'var(--color-ink-3)' }}>
+                      —
+                    </td>
+                    <td>
+                      <span className="flex flex-wrap items-center gap-1">
+                        <span className="mono" style={{ fontSize: 'var(--text-xs)' }}>
+                          {a.username}
+                        </span>
+                        {isMe(a) && <span className="chip chip-accent">bạn</span>}
+                        {a.mustChangePassword ? (
+                          <span className="chip chip-warn" title="Đang dùng mật khẩu ban đầu">
+                            MK ban đầu
+                          </span>
+                        ) : (
+                          <span className="chip chip-ok">Đã đổi MK</span>
+                        )}
+                      </span>
+                    </td>
+                    <td>
+                      {canEdit(a) ? (
+                        <AppSelect
+                          aria-label={`Vai trò của ${a.username}`}
+                          width="8.75rem"
+                          value={a.role}
+                          disabled={saving}
+                          onChange={(v) => void setRole(a, v)}
+                          options={roleOptions}
+                        />
+                      ) : (
+                        <span className="chip chip-accent" title={lockTitle}>
+                          PM
+                        </span>
+                      )}
+                    </td>
+                    <td className="actions">
+                      {canEdit(a) && (
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          disabled={saving}
+                          title="Đặt lại mật khẩu về ban đầu"
+                          onClick={() => resetPassword(a)}
+                        >
+                          Đặt lại MK
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
                 {employees.map((e) => {
                   const chips = prefChips(e)
                   const acc = accountFor(e)
                   return (
                     <tr
                       key={e.id}
-                      data-active={acc && isMe(acc) ? 'true' : undefined}
                       draggable
                       onDragStart={() => setDragId(e.id)}
                       onDragOver={(ev) => ev.preventDefault()}
@@ -356,7 +472,13 @@ export default function EmployeesPage() {
                             >
                               {e.name}
                             </span>
-                            <span className="mono" style={{ fontSize: 'var(--text-xs)', color: 'var(--color-ink-3)' }}>
+                            <span
+                              className="mono"
+                              style={{
+                                fontSize: 'var(--text-xs)',
+                                color: 'var(--color-ink-3)',
+                              }}
+                            >
                               {e.code}
                             </span>
                           </span>
@@ -438,10 +560,7 @@ export default function EmployeesPage() {
                             value={acc.role}
                             disabled={saving}
                             onChange={(v) => void setRole(acc, v)}
-                            options={[
-                              { value: 'admin', label: 'Admin' },
-                              { value: 'member', label: 'Thành viên' },
-                            ]}
+                            options={roleOptions}
                           />
                         ) : (
                           <span style={{ color: 'var(--color-ink-3)' }}>—</span>
@@ -496,7 +615,7 @@ export default function EmployeesPage() {
                 </thead>
                 <tbody>
                   {unlinked.map((a) => (
-                    <tr key={a.id} data-active={isMe(a) ? 'true' : undefined}>
+                    <tr key={a.id}>
                       <td>
                         <span className="flex items-center gap-2">
                           <span className="avatar-sm">{a.username.slice(0, 2).toUpperCase()}</span>
@@ -513,10 +632,7 @@ export default function EmployeesPage() {
                           value={a.role}
                           disabled={saving}
                           onChange={(v) => void setRole(a, v)}
-                          options={[
-                            { value: 'admin', label: 'Admin' },
-                            { value: 'member', label: 'Thành viên' },
-                          ]}
+                          options={roleOptions}
                         />
                       </td>
                       <td>
@@ -528,7 +644,10 @@ export default function EmployeesPage() {
                           onChange={(v) => void linkAccount(a, v)}
                           options={[
                             { value: '', label: '— chọn —' },
-                            ...employees.map((e) => ({ value: e.id, label: e.name })),
+                            ...employees.map((e) => ({
+                              value: e.id,
+                              label: e.name,
+                            })),
                           ]}
                         />
                       </td>
@@ -547,7 +666,15 @@ export default function EmployeesPage() {
       )}
 
       {editing && (
-        <EmployeeForm employee={editing} month={month} year={year} onSave={save} onCancel={() => setEditing(null)} />
+        <EmployeeForm
+          employee={editing}
+          isNew={!baseEmployees.some((b) => b.id === editing.id)}
+          month={month}
+          year={year}
+          onSave={save}
+          onSavePm={createPm}
+          onCancel={() => setEditing(null)}
+        />
       )}
     </div>
   )
@@ -555,18 +682,25 @@ export default function EmployeesPage() {
 
 function EmployeeForm({
   employee,
+  isNew,
   month,
   year,
   onSave,
+  onSavePm,
   onCancel,
 }: {
   employee: Employee
+  /** đang thêm mới → cho phép chọn "Tạo tài khoản PM" thay vì nhân viên làm ca */
+  isNew: boolean
   month: number
   year: number
   onSave: (e: Employee) => void
+  /** tạo tài khoản PM với mã/tên đăng nhập đã nhập */
+  onSavePm: (code: string) => void
   onCancel: () => void
 }) {
   const [e, setE] = useState(employee)
+  const [isPm, setIsPm] = useState(false)
   const D = daysInMonth(month, year)
   const set = (patch: Partial<Employee>) => setE((prev) => ({ ...prev, ...patch }))
 
@@ -575,137 +709,175 @@ function EmployeeForm({
       days_off: e.days_off.includes(d) ? e.days_off.filter((x) => x !== d) : [...e.days_off, d].sort((a, b) => a - b),
     })
 
-  const invalid = e.name.trim() === '' || e.code.trim() === '' || (e.no_s1 && e.no_s2 && e.no_s3)
+  const invalid = isPm
+    ? e.code.trim() === ''
+    : e.name.trim() === '' || e.code.trim() === '' || (e.no_s1 && e.no_s2 && e.no_s3)
 
   return (
     <div
       className="modal-backdrop overflow-y-auto"
       role="dialog"
       aria-modal="true"
-      aria-label={employee.name ? `Sửa ${employee.name}` : 'Thêm nhân viên'}
+      aria-label={employee.name ? `Sửa ${employee.name}` : isPm ? 'Tạo tài khoản PM' : 'Thêm nhân viên'}
       onMouseDown={(ev) => {
         if (ev.target === ev.currentTarget) onCancel()
       }}
     >
       <div className="modal modal-wide">
         <div className="auth-head">
-          <span>nhân viên</span>
-          <span className="eyebrow">tháng {month}/{year}</span>
+          <span>{isPm ? 'tài khoản PM' : 'nhân viên'}</span>
+          <span className="eyebrow">
+            tháng {month}/{year}
+          </span>
         </div>
-        <h2 style={{ fontSize: 'var(--text-lg)' }}>{employee.name ? `Sửa — ${employee.name}` : 'Thêm nhân viên'}</h2>
+        <h2 style={{ fontSize: 'var(--text-lg)' }}>
+          {employee.name ? `Sửa — ${employee.name}` : isPm ? 'Tạo tài khoản PM' : 'Thêm nhân viên'}
+        </h2>
         <div className="flex flex-col gap-4">
-          <div className="grid grid-cols-[minmax(0,1fr)_7rem] gap-3">
-            <label className="field">
-              <span className="field-label">Họ tên</span>
+          {isNew && (
+            <label className="checkbox-row">
+              <input type="checkbox" checked={isPm} onChange={(ev) => setIsPm(ev.target.checked)} />
+              Tạo tài khoản PM — toàn quyền như admin, không nằm trong danh sách làm ca nên không xếp ca
+            </label>
+          )}
+
+          {isPm ? (
+            <label className="field" style={{ maxWidth: '20rem' }}>
+              <span className="field-label">{authMode === 'local' ? 'Tên đăng nhập' : 'Mã (email đăng nhập)'}</span>
               <input
                 className="input"
-                value={e.name}
-                onChange={(ev) => set({ name: ev.target.value })}
-                aria-invalid={e.name.trim() === '' || undefined}
+                value={e.code}
+                placeholder={authMode === 'local' ? 'ví dụ PM' : `ví dụ pm → pm@${ACCOUNT_EMAIL_DOMAIN}`}
+                onChange={(ev) => set({ code: ev.target.value })}
+                aria-invalid={e.code.trim() === '' || undefined}
                 autoFocus
               />
+              <span className="auth-note">Mật khẩu ban đầu {DEFAULT_PASSWORD}, phải đổi ở lần đăng nhập đầu tiên.</span>
             </label>
-            <label className="field">
-              <span className="field-label">Mã NV</span>
-              <input className="input" value={e.code} onChange={(ev) => set({ code: ev.target.value })} />
-            </label>
-          </div>
+          ) : (
+            <div className="grid grid-cols-[minmax(0,1fr)_7rem] gap-3">
+              <label className="field">
+                <span className="field-label">Họ tên</span>
+                <input
+                  className="input"
+                  value={e.name}
+                  onChange={(ev) => set({ name: ev.target.value })}
+                  aria-invalid={e.name.trim() === '' || undefined}
+                  autoFocus
+                />
+              </label>
+              <label className="field">
+                <span className="field-label">Mã NV</span>
+                <input className="input" value={e.code} onChange={(ev) => set({ code: ev.target.value })} />
+              </label>
+            </div>
+          )}
 
-          <fieldset className="m-0 border-0 p-0">
-            <legend className="field-label" style={{ marginBottom: 'var(--space-2xs)' }}>
-              Ràng buộc ca — tháng {month}/{year} (chỉ áp dụng cho tháng này)
-            </legend>
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={e.prefer_night}
-                onChange={(ev) =>
-                  set({
-                    prefer_night: ev.target.checked,
-                    min_night_shifts: ev.target.checked ? e.min_night_shifts || 16 : 0,
-                  })
-                }
-              />
-              Ưu tiên ca đêm (S3) — tối thiểu
+          {!isPm && (
+            <fieldset className="m-0 border-0 p-0">
+              <legend className="field-label" style={{ marginBottom: 'var(--space-2xs)' }}>
+                Ràng buộc ca — tháng {month}/{year} (chỉ áp dụng cho tháng này)
+              </legend>
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={e.prefer_night}
+                  onChange={(ev) =>
+                    set({
+                      prefer_night: ev.target.checked,
+                      min_night_shifts: ev.target.checked ? e.min_night_shifts || 16 : 0,
+                    })
+                  }
+                />
+                Ưu tiên ca đêm (S3) — tối thiểu
+                <input
+                  type="number"
+                  className="input input-num"
+                  style={{ width: '3.5rem' }}
+                  min={0}
+                  max={26}
+                  disabled={!e.prefer_night}
+                  value={e.min_night_shifts}
+                  onChange={(ev) => set({ min_night_shifts: Number(ev.target.value) })}
+                  aria-label="Số ca đêm tối thiểu mỗi tháng"
+                />
+                ca đêm/tháng (vẫn có 2-3 ca S1, S2)
+              </label>
+              <label className="checkbox-row">
+                <input type="checkbox" checked={e.no_s1} onChange={(ev) => set({ no_s1: ev.target.checked })} />
+                Không làm ca S1 (sáng)
+              </label>
+              <label className="checkbox-row">
+                <input type="checkbox" checked={e.no_s2} onChange={(ev) => set({ no_s2: ev.target.checked })} />
+                Không làm ca S2 (chiều)
+              </label>
+              <label className="checkbox-row">
+                <input type="checkbox" checked={e.no_s3} onChange={(ev) => set({ no_s3: ev.target.checked })} />
+                Không làm ca S3 (đêm)
+              </label>
+              {e.no_s1 && e.no_s2 && e.no_s3 && (
+                <p className="alert alert-danger" style={{ marginTop: 'var(--space-xs)' }}>
+                  Không thể chặn cả 3 ca — người này sẽ không xếp được lịch.
+                </p>
+              )}
+            </fieldset>
+          )}
+
+          {!isPm && (
+            <label className="field" style={{ maxWidth: '14rem' }}>
+              <span className="field-label">Số ca tối đa/tháng</span>
               <input
                 type="number"
                 className="input input-num"
-                style={{ width: '3.5rem' }}
                 min={0}
-                max={26}
-                disabled={!e.prefer_night}
-                value={e.min_night_shifts}
-                onChange={(ev) => set({ min_night_shifts: Number(ev.target.value) })}
-                aria-label="Số ca đêm tối thiểu mỗi tháng"
+                max={31}
+                value={e.max_shifts_per_month}
+                onChange={(ev) => set({ max_shifts_per_month: Number(ev.target.value) })}
               />
-              ca đêm/tháng (vẫn có 2-3 ca S1, S2)
             </label>
-            <label className="checkbox-row">
-              <input type="checkbox" checked={e.no_s1} onChange={(ev) => set({ no_s1: ev.target.checked })} />
-              Không làm ca S1 (sáng)
-            </label>
-            <label className="checkbox-row">
-              <input type="checkbox" checked={e.no_s2} onChange={(ev) => set({ no_s2: ev.target.checked })} />
-              Không làm ca S2 (chiều)
-            </label>
-            <label className="checkbox-row">
-              <input type="checkbox" checked={e.no_s3} onChange={(ev) => set({ no_s3: ev.target.checked })} />
-              Không làm ca S3 (đêm)
-            </label>
-            {e.no_s1 && e.no_s2 && e.no_s3 && (
-              <p className="alert alert-danger" style={{ marginTop: 'var(--space-xs)' }}>
-                Không thể chặn cả 3 ca — người này sẽ không xếp được lịch.
-              </p>
-            )}
-          </fieldset>
+          )}
 
-          <label className="field" style={{ maxWidth: '14rem' }}>
-            <span className="field-label">Số ca tối đa/tháng</span>
-            <input
-              type="number"
-              className="input input-num"
-              min={0}
-              max={31}
-              value={e.max_shifts_per_month}
-              onChange={(ev) => set({ max_shifts_per_month: Number(ev.target.value) })}
-            />
-          </label>
-
-          <div className="field">
-            <span className="field-label">
-              Ngày nghỉ cố định — tháng {month}/{year} ({e.days_off.length} ngày)
-            </span>
-            <div className="grid grid-cols-7 gap-1 sm:grid-cols-10">
-              {Array.from({ length: D }, (_, i) => i + 1).map((d) => {
-                const on = e.days_off.includes(d)
-                return (
-                  <button
-                    key={d}
-                    type="button"
-                    aria-pressed={on}
-                    onClick={() => toggleDay(d)}
-                    className="rounded-md py-1 text-center text-xs font-semibold transition-colors"
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      border: '1px solid var(--color-line-strong)',
-                      background: on ? 'var(--color-accent)' : 'white',
-                      color: on ? 'var(--color-accent-ink)' : 'var(--color-ink-2)',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {d}
-                  </button>
-                )
-              })}
+          {!isPm && (
+            <div className="field">
+              <span className="field-label">
+                Ngày nghỉ cố định — tháng {month}/{year} ({e.days_off.length} ngày)
+              </span>
+              <div className="grid grid-cols-7 gap-1 sm:grid-cols-10">
+                {Array.from({ length: D }, (_, i) => i + 1).map((d) => {
+                  const on = e.days_off.includes(d)
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => toggleDay(d)}
+                      className="rounded-md py-1 text-center text-xs font-semibold transition-colors"
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        border: '1px solid var(--color-line-strong)',
+                        background: on ? 'var(--color-accent)' : 'white',
+                        color: on ? 'var(--color-accent-ink)' : 'var(--color-ink-2)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {d}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="flex justify-end gap-2">
             <button className="btn btn-ghost" onClick={onCancel}>
               Hủy
             </button>
-            <button className="btn btn-primary" disabled={invalid} onClick={() => onSave(e)}>
-              Lưu
+            <button
+              className="btn btn-primary"
+              disabled={invalid}
+              onClick={() => (isPm ? onSavePm(e.code) : onSave(e))}
+            >
+              {isPm ? 'Tạo tài khoản PM' : 'Lưu'}
             </button>
           </div>
         </div>

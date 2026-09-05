@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { localAuth, listAccounts, matchUsername, DEFAULT_PASSWORD } from './auth'
+import { canManage, localAuth, listAccounts, matchUsername, DEFAULT_PASSWORD } from './auth'
 
 // localStorage giả cho môi trường node
 const mem = new Map<string, string>()
@@ -56,5 +56,38 @@ describe('đăng nhập chế độ demo', () => {
     expect(matchUsername('chienhd', 'ChienHD2')).toBe(true)
     expect(matchUsername('ChienHD2', 'ChienHD2')).toBe(true)
     expect(matchUsername('Chien', 'ChienHD2')).toBe(false)
+  })
+})
+
+describe('vai trò PM', () => {
+  it('PM có quyền quản lý, không gắn nhân viên; hạ admin cuối cùng khi còn PM thì được', async () => {
+    await localAuth.createAccount('PM', 'pm')
+    const pm = await localAuth.login('PM', DEFAULT_PASSWORD)
+    expect(pm.role).toBe('pm')
+    expect(pm.employeeId).toBeUndefined()
+    expect(canManage(pm.role)).toBe(true)
+    await expect(localAuth.setEmployee('PM', 'e1')).rejects.toThrow()
+    await expect(localAuth.createAccount('pm', 'pm')).rejects.toThrow()
+    // đổi admin (đang gắn nhân viên e5) sang PM → tự bỏ gắn nhân viên
+    await localAuth.setRole('ChienHD2', 'pm')
+    expect((await localAuth.login('ChienHD2', DEFAULT_PASSWORD)).employeeId).toBeUndefined()
+    // còn PM nên hạ ChienHD2 xuống member được; hạ PM cuối cùng thì không
+    await localAuth.setRole('ChienHD2', 'member')
+    await expect(localAuth.setRole('PM', 'member')).rejects.toThrow()
+  })
+})
+
+describe('admin không sửa được tài khoản PM', () => {
+  it('admin bị chặn đổi vai trò / đặt lại mật khẩu PM; PM thì được', async () => {
+    await localAuth.createAccount('PM', 'pm')
+    await localAuth.login('ChienHD2', DEFAULT_PASSWORD) // admin
+    await expect(localAuth.setRole('PM', 'member')).rejects.toThrow(/PM/)
+    await expect(localAuth.resetPassword('PM')).rejects.toThrow(/PM/)
+    // admin vẫn sửa được tài khoản thường
+    await localAuth.setRole('VuNL4', 'admin')
+    await localAuth.login('PM', DEFAULT_PASSWORD) // PM
+    await localAuth.resetPassword('PM')
+    await localAuth.setRole('PM', 'admin')
+    expect((await localAuth.login('PM', DEFAULT_PASSWORD)).role).toBe('admin')
   })
 })

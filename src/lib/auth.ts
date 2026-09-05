@@ -10,7 +10,23 @@ import { SEED_EMPLOYEES } from './seed'
  * Chỉ admin mới được xếp lịch / chỉnh lịch / quản lý nhân viên & cài đặt.
  */
 
-export type Role = 'admin' | 'member'
+/**
+ * Vai trò:
+ *  - admin: toàn quyền, thường gắn với một nhân viên làm ca.
+ *  - pm: toàn quyền như admin nhưng KHÔNG nằm trong danh sách nhân viên làm ca → không bao giờ bị xếp ca.
+ *  - member: chỉ xem lịch đã chốt, tự đăng ký ngày nghỉ.
+ */
+export type Role = 'admin' | 'pm' | 'member'
+export const ROLES: Role[] = ['admin', 'pm', 'member']
+export const ROLE_LABELS: Record<Role, string> = { admin: 'Admin', pm: 'PM', member: 'Thành viên' }
+
+export function parseRole(value: unknown): Role {
+  return value === 'admin' || value === 'pm' ? value : 'member'
+}
+/** admin và pm có cùng quyền quản lý (xếp lịch, nhân viên, cài đặt, tài khoản) */
+export function canManage(role: Role | undefined): boolean {
+  return role === 'admin' || role === 'pm'
+}
 
 export interface AuthUser {
   id: string
@@ -107,6 +123,18 @@ async function findAccount(username: string): Promise<Account | undefined> {
   )
 }
 
+/** tài khoản PM chỉ PM mới được sửa (đổi vai trò, đặt lại mật khẩu, gắn nhân viên) — admin không có quyền */
+export function canEditAccount(actorRole: Role | undefined, targetRole: Role): boolean {
+  return targetRole !== 'pm' || actorRole === 'pm'
+}
+export const PM_EDIT_ERROR = 'Chỉ PM mới được sửa tài khoản PM.'
+
+async function assertCanEdit(target: Account) {
+  if (target.role !== 'pm') return
+  const actor = await localAuth.currentUser()
+  if (!canEditAccount(actor?.role, target.role)) throw new Error(PM_EDIT_ERROR)
+}
+
 export const localAuth = {
   async currentUser(): Promise<AuthUser | null> {
     const username = lsGet<string | null>(LS_SESSION, null)
@@ -141,26 +169,31 @@ export const localAuth = {
     const accounts = await listAccounts()
     const acc = accounts.find((a) => a.username === username)
     if (!acc) return
+    await assertCanEdit(acc)
     acc.passwordHash = await hashPassword(DEFAULT_PASSWORD)
     acc.mustChangePassword = true
     saveAccounts(accounts)
   },
-  /** admin: đổi vai trò — luôn phải còn ít nhất 1 admin */
+  /** admin: đổi vai trò — luôn phải còn ít nhất 1 tài khoản quản lý (admin/PM); PM tự bỏ gắn nhân viên */
   async setRole(username: string, role: Role) {
     const accounts = await listAccounts()
     const acc = accounts.find((a) => a.username === username)
     if (!acc) return
-    if (acc.role === 'admin' && role !== 'admin' && accounts.filter((a) => a.role === 'admin').length <= 1) {
-      throw new Error('Phải còn ít nhất một tài khoản admin.')
+    await assertCanEdit(acc)
+    if (canManage(acc.role) && !canManage(role) && accounts.filter((a) => canManage(a.role)).length <= 1) {
+      throw new Error('Phải còn ít nhất một tài khoản admin hoặc PM.')
     }
     acc.role = role
+    if (role === 'pm') acc.employeeId = undefined
     saveAccounts(accounts)
   },
-  /** admin: gắn / bỏ gắn tài khoản với nhân viên */
+  /** admin: gắn / bỏ gắn tài khoản với nhân viên (PM không gắn được — không xếp ca) */
   async setEmployee(username: string, employeeId: string | null) {
     const accounts = await listAccounts()
     const acc = accounts.find((a) => a.username === username)
     if (!acc) return
+    await assertCanEdit(acc)
+    if (acc.role === 'pm' && employeeId) throw new Error('Tài khoản PM không nằm trong danh sách làm ca, không gắn nhân viên.')
     acc.employeeId = employeeId ?? undefined
     saveAccounts(accounts)
   },
@@ -173,6 +206,22 @@ export const localAuth = {
       passwordHash: await hashPassword(DEFAULT_PASSWORD),
       role: 'member',
       employeeId,
+      mustChangePassword: true,
+    })
+    saveAccounts(accounts)
+  },
+  /** admin: tạo tài khoản quản lý (PM/admin) không gắn nhân viên, mật khẩu ban đầu 123456 */
+  async createAccount(username: string, role: Role) {
+    const name = username.trim()
+    if (!name) throw new Error('Tên đăng nhập không được để trống.')
+    const accounts = await listAccounts()
+    if (accounts.some((a) => a.username.toLowerCase() === name.toLowerCase())) {
+      throw new Error(`Tài khoản ${name} đã tồn tại.`)
+    }
+    accounts.push({
+      username: name,
+      passwordHash: await hashPassword(DEFAULT_PASSWORD),
+      role,
       mustChangePassword: true,
     })
     saveAccounts(accounts)
@@ -209,7 +258,7 @@ export const supabaseAuth = {
     return {
       id: u.id,
       username: u.email ?? u.id,
-      role: roleRow?.role === 'admin' ? 'admin' : 'member',
+      role: parseRole(roleRow?.role),
       employeeId: roleRow?.employee_id ?? undefined,
       // admin đặt user_metadata.must_change_password = true khi tạo tài khoản với mật khẩu tạm
       mustChangePassword: u.user_metadata?.must_change_password === true,

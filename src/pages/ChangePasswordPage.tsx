@@ -9,9 +9,11 @@ import { useFeedback } from '../components/Feedback'
 interface Props {
   /** true khi bắt buộc đổi ở lần đăng nhập đầu — không có nút bỏ qua */
   forced?: boolean
+  /** chỉ render form (nhúng trong trang Tài khoản), không có tiêu đề trang / nút Hủy */
+  embedded?: boolean
 }
 
-export default function ChangePasswordPage({ forced = false }: Props) {
+export default function ChangePasswordPage({ forced = false, embedded = false }: Props) {
   const { user, changePassword, logout } = useAuth()
   const { toast } = useFeedback()
   const navigate = useNavigate()
@@ -38,7 +40,12 @@ export default function ChangePasswordPage({ forced = false }: Props) {
       await changePassword(oldPassword, newPassword)
       setDone(true)
       toast('Đã đổi mật khẩu.')
-      if (!forced) setTimeout(() => navigate('/'), 600)
+      if (!forced && !embedded) setTimeout(() => navigate('/'), 600)
+      if (embedded) {
+        setOldPassword('')
+        setNewPassword('')
+        setConfirm('')
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Đổi mật khẩu thất bại.')
     } finally {
@@ -55,8 +62,9 @@ export default function ChangePasswordPage({ forced = false }: Props) {
             type="password"
             className="input"
             required
-            autoFocus
+            autoFocus={!embedded}
             autoComplete="current-password"
+            placeholder="Nhập mật khẩu hiện tại"
             value={oldPassword}
             onChange={(e) => setOldPassword(e.target.value)}
           />
@@ -70,6 +78,7 @@ export default function ChangePasswordPage({ forced = false }: Props) {
           required
           minLength={MIN_PASSWORD_LENGTH}
           autoComplete="new-password"
+          placeholder={`Ít nhất ${MIN_PASSWORD_LENGTH} ký tự`}
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
         />
@@ -81,6 +90,7 @@ export default function ChangePasswordPage({ forced = false }: Props) {
           className="input"
           required
           autoComplete="new-password"
+          placeholder="Nhập lại mật khẩu mới"
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
           aria-invalid={confirm.length > 0 && confirm !== newPassword ? true : undefined}
@@ -100,7 +110,7 @@ export default function ChangePasswordPage({ forced = false }: Props) {
           <button type="button" className="btn btn-ghost" onClick={() => void logout()}>
             Đăng xuất
           </button>
-        ) : (
+        ) : embedded ? null : (
           <button type="button" className="btn btn-ghost" onClick={() => navigate(-1)}>
             Hủy
           </button>
@@ -122,6 +132,14 @@ export default function ChangePasswordPage({ forced = false }: Props) {
           {fields}
         </form>
       </AuthShell>
+    )
+  }
+
+  if (embedded) {
+    return (
+      <form onSubmit={submit} className="flex max-w-sm flex-col gap-4">
+        {fields}
+      </form>
     )
   }
 

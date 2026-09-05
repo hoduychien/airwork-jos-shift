@@ -1,7 +1,7 @@
 /* Hallmark · macrostructure: Workbench (app) · theme: studied-DNA (source: url)
  * source-url: https://www.together.ai/ · studied: yes · DNA-source: url
  * observed-fonts: The Future + PP Neue Montreal Mono (commercial) → substitutes: Manrope + JetBrains Mono (Vietnamese)
- * observed-paper: #fff · observed-ink: #000 · observed-accent: #fc4c02 (orange) · primary = orange (user request), ink for text
+ * observed-paper: #fff · observed-ink: #000 · observed-accent: #fc4c02 (orange) · primary = xanh primary thuần (user request), ink for text
  * product palette: purple #caaef5 · cyan #70e9f0 · blue #9bcdf5 · pink #f7b0df · orange #febea3 (card tints)
  * rhythm: unknown (URL mode) · pre-emit critique: P4 H5 E5 S5 R4 V4
  * shift-cell colors stay spec-mandated Excel hexes (mirrored in the .xlsx export)
@@ -20,14 +20,15 @@
   /* nền tối (DNA: #010120) cho khối tuyên bố / nền đăng nhập */
   --color-ink-deep: oklch(15% 0.06 280);
 
-  /* màu chủ đạo = cam thương hiệu (#fc4c02) tối nhẹ để chữ trắng đạt ≥ 4.5:1; nút phụ = đen 8% */
-  --color-accent: oklch(58% 0.2 38);
-  --color-accent-hover: oklch(52% 0.2 38);
+  /* màu chủ đạo = xanh primary thuần (≈ #0d5cff), chữ trắng đạt ≥ 4.5:1; nút phụ = đen 8% */
+  --color-accent: oklch(52% 0.25 262);
+  --color-accent-hover: oklch(46% 0.24 262);
   --color-accent-soft: oklch(0% 0 0 / 0.08);
   --color-accent-ink: oklch(100% 0 0);
-  --color-signal: oklch(66% 0.22 40);
-  --color-signal-soft: oklch(95% 0.05 50);
-  --color-focus: oklch(66% 0.22 40);
+  /* điểm nhấn (link đang chọn, chấm chỉnh tay, vai trò quản lý) cùng tông xanh primary */
+  --color-signal: oklch(55% 0.24 262);
+  --color-signal-soft: oklch(95% 0.03 262);
+  --color-focus: oklch(55% 0.24 262);
 
   /* bảng màu sản phẩm (DNA) — nền thẻ, chip, khối hình đăng nhập */
   --color-tint-purple: oklch(82% 0.09 300);
@@ -40,6 +41,8 @@
   --color-tint-blue-soft: oklch(94% 0.03 240);
   --color-tint-pink-soft: oklch(96% 0.03 340);
   --color-tint-orange-soft: oklch(96% 0.03 50);
+  /* cam đậm — dùng riêng cho mốc đầu/cuối của date range picker */
+  --color-orange: oklch(66% 0.22 40);
 
   /* status */
   --color-danger: oklch(55% 0.2 27);

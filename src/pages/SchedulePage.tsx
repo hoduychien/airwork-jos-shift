@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import DateRangePicker from '@wojtekmaj/react-daterange-picker'
+import '@wojtekmaj/react-daterange-picker/dist/DateRangePicker.css'
+import 'react-calendar/dist/Calendar.css'
 import AppSelect from '../components/AppSelect'
 import RuleChecklist from '../components/RuleChecklist'
 import ScheduleGrid from '../components/ScheduleGrid'
@@ -37,6 +40,8 @@ export default function SchedulePage() {
   // ô nhập cập nhật ngay, bảng chỉ lọc lại sau khi ngừng gõ 250ms
   const debouncedQuery = useDebounce(query, 250)
   const [shiftFilter, setShiftFilter] = useState<Shift | null>(null)
+  // popup chọn khoảng ngày cần xếp (mở khi bấm "Xáo phương án khác"); null = đóng
+  const [rangePick, setRangePick] = useState<[Date, Date] | null>(null)
   const { run, running } = useSolver()
   const seedRef = useRef(1)
   // realtime: bỏ qua sự kiện do chính tab này vừa ghi (mỗi dòng upsert = 1 sự kiện → hàng trăm lần fetch),
@@ -48,6 +53,18 @@ export default function SchedulePage() {
   }
 
   const D = daysInMonth(month, year)
+  const monthStart = useMemo(() => new Date(year, month - 1, 1), [month, year])
+  const monthEnd = useMemo(() => new Date(year, month - 1, D), [month, year, D])
+  // đổi tháng → đóng popup chọn khoảng ngày
+  useEffect(() => setRangePick(null), [month, year])
+  /** khoảng ngày 1-based [from..to] trong tháng từ 2 mốc Date; null = cả tháng */
+  const toDayRange = (pick: [Date, Date] | null): { from: number; to: number } | null => {
+    if (!pick) return null
+    const lo = Math.max(1, Math.min(pick[0].getDate(), pick[1].getDate()))
+    const hi = Math.min(D, Math.max(pick[0].getDate(), pick[1].getDate()))
+    return lo <= 1 && hi >= D ? null : { from: lo, to: hi }
+  }
+  const rangeLabelOf = (r: { from: number; to: number } | null) => (r ? `ngày ${r.from}–${r.to}` : 'cả tháng')
 
   const load = useCallback(
     async (mode: 'hard' | 'soft' = 'hard') => {
@@ -116,15 +133,26 @@ export default function SchedulePage() {
   )
   const violationMap = useMemo(() => violationCellMap(violations, employees, matrix), [violations, employees, matrix])
 
-  const generate = async (shuffle: boolean) => {
-    if (schedule) {
+  /**
+   * Xếp lịch. `dayRange` = khoảng ngày cần xếp (null = cả tháng).
+   * `skipConfirm` khi đã xác nhận trong popup chọn khoảng ngày.
+   */
+  const generate = async (
+    shuffle: boolean,
+    dayRange: { from: number; to: number } | null = null,
+    skipConfirm = false,
+  ) => {
+    const rangeLabel = rangeLabelOf(dayRange)
+    const scope = dayRange ? ` (${rangeLabel})` : ''
+    if (schedule && !skipConfirm) {
       const ok = await confirm({
         title:
           schedule.status === 'published'
-            ? `Tạo lại lịch tháng ${month}/${year} đã chốt?`
-            : `Tạo lại lịch tháng ${month}/${year}?`,
-        message:
-          schedule.status === 'published'
+            ? `Tạo lại lịch tháng ${month}/${year} đã chốt${scope}?`
+            : `Tạo lại lịch tháng ${month}/${year}${scope}?`,
+        message: dayRange
+          ? `Chỉ ${rangeLabel} được xếp lại; các ngày còn lại giữ nguyên.${schedule.status === 'published' ? ' Lịch về trạng thái bản nháp.' : ''} Ô chỉnh tay trong khoảng này sẽ mất.`
+          : schedule.status === 'published'
             ? 'Lịch đã chốt sẽ bị thay bằng phương án mới (trạng thái về bản nháp). Các ô chỉnh tay sẽ mất.'
             : 'Phương án hiện tại và các ô chỉnh tay sẽ bị thay bằng phương án mới.',
         confirmLabel: 'Tạo lại',
@@ -144,18 +172,28 @@ export default function SchedulePage() {
       restMin: settings.rest_min,
       restMax: settings.rest_max,
       seed: seedRef.current,
+      range: dayRange ?? undefined,
+      base: dayRange ? schedule?.matrix : undefined,
     })
     setConflicts(result.conflicts)
     setSaving(true)
     markSelfWrite()
     try {
+      // giữ ô chỉnh tay NGOÀI khoảng vừa xếp
+      const keptManual = new Set<string>()
+      if (dayRange && schedule) {
+        for (const key of schedule.manual) {
+          const day = Number(key.split(':')[1])
+          if (day < dayRange.from || day > dayRange.to) keptManual.add(key)
+        }
+      }
       const saved = await store.saveSchedule({
         id: schedule?.id ?? `local-${year}-${month}`,
         month,
         year,
         status: 'draft',
         matrix: result.matrix,
-        manual: new Set(),
+        manual: keptManual,
       })
       markSelfWrite() // sự kiện realtime của lượt ghi này còn về sau khi request xong
       // hiển thị đúng những gì ĐÃ LƯU (đọc lại từ backend) — nếu lệch với kết quả solver thì báo ngay,
@@ -174,9 +212,9 @@ export default function SchedulePage() {
       } else {
         setSchedule({ ...saved })
       }
-      if (result.ok) toast(`Đã tạo lịch tháng ${month}/${year} — đạt mọi ràng buộc.`)
-      else
-        toast(`Đã tạo lịch tháng ${month}/${year} nhưng còn ${result.violations.length} vi phạm — xem ô đỏ.`, 'danger')
+      const what = dayRange ? `lịch ${rangeLabel} tháng ${month}/${year}` : `lịch tháng ${month}/${year}`
+      if (result.ok) toast(`Đã tạo ${what} — đạt mọi ràng buộc.`)
+      else toast(`Đã tạo ${what} nhưng còn ${result.violations.length} vi phạm — xem ô đỏ.`, 'danger')
     } finally {
       setSaving(false)
     }
@@ -369,7 +407,11 @@ export default function SchedulePage() {
         {isAdmin && (
           <>
             <span className="toolbar-sep hidden sm:block" />
-            <button className="btn btn-ghost" onClick={() => generate(true)} disabled={busy || employees.length === 0}>
+            <button
+              className="btn btn-ghost"
+              onClick={() => setRangePick([monthStart, monthEnd])}
+              disabled={busy || employees.length === 0}
+            >
               Xáo phương án khác
             </button>
           </>
@@ -603,6 +645,167 @@ export default function SchedulePage() {
       {schedule && !hardLoading && (
         <RuleChecklist employees={employees} matrix={matrix} settings={settings} violations={violations} />
       )}
+
+      {rangePick && (
+        <RangeDialog
+          value={rangePick}
+          minDate={monthStart}
+          maxDate={monthEnd}
+          month={month}
+          year={year}
+          published={schedule?.status === 'published'}
+          onChange={setRangePick}
+          onCancel={() => setRangePick(null)}
+          onConfirm={() => {
+            const r = toDayRange(rangePick)
+            setRangePick(null)
+            void generate(true, r, true)
+          }}
+        />
+      )}
     </div>
+  )
+}
+
+/** Popup chọn khoảng ngày cần xếp lại (react-daterange-picker) — mặc định cả tháng đang xem. */
+function RangeDialog({
+  value,
+  minDate,
+  maxDate,
+  month,
+  year,
+  published,
+  onChange,
+  onCancel,
+  onConfirm,
+}: {
+  value: [Date, Date]
+  minDate: Date
+  maxDate: Date
+  month: number
+  year: number
+  published: boolean
+  onChange: (v: [Date, Date]) => void
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  const D = maxDate.getDate()
+  const from = value[0].getDate()
+  const to = value[1].getDate()
+  const whole = from <= 1 && to >= D
+  // lịch chỉ mở khi người dùng bấm vào ô chọn — không tự mở / tự focus lúc popup hiện ra
+  const [open, setOpen] = useState(false)
+  const pickerRef = useRef<HTMLDivElement>(null)
+  // chỉ chọn trên lịch, không gõ tay: khóa các ô dd/mm/yyyy (readOnly, bỏ khỏi tab)
+  useEffect(() => {
+    pickerRef.current?.querySelectorAll<HTMLInputElement>('.react-daterange-picker__inputGroup input').forEach((el) => {
+      el.readOnly = true
+      el.tabIndex = -1
+    })
+  }, [value])
+  return (
+    <div
+      className="modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Chọn khoảng ngày cần xếp"
+      onMouseDown={(ev) => {
+        if (ev.target === ev.currentTarget) onCancel()
+      }}
+    >
+      <div className="modal range-modal">
+        <div className="auth-head">
+          <span>xáo phương án</span>
+          <span className="eyebrow">
+            tháng {month}/{year}
+          </span>
+        </div>
+        <h2 style={{ fontSize: 'var(--text-md)' }}>Chọn khoảng ngày cần xếp lại</h2>
+        <div className="field" ref={pickerRef} onClick={() => setOpen(true)}>
+          <span className="field-label">Khoảng ngày</span>
+          <DateRangePicker
+            isOpen={open}
+            onCalendarOpen={() => setOpen(true)}
+            onCalendarClose={() => setOpen(false)}
+            value={value}
+            onChange={(v) => {
+              if (Array.isArray(v) && v[0] instanceof Date && v[1] instanceof Date) onChange([v[0], v[1]])
+            }}
+            minDate={minDate}
+            maxDate={maxDate}
+            locale="vi-VN"
+            format="dd/MM/y"
+            dayPlaceholder="dd"
+            monthPlaceholder="mm"
+            yearPlaceholder="yyyy"
+            clearIcon={null}
+            calendarIcon={<CalendarIcon />}
+            rangeDivider=" → "
+            calendarAriaLabel="Mở lịch"
+            calendarProps={{
+              prevLabel: <Chevron dir="left" />,
+              nextLabel: <Chevron dir="right" />,
+              prev2Label: null,
+              next2Label: null,
+            }}
+          />
+        </div>
+        <p className="confirm-msg" style={{ margin: 0 }}>
+          {whole
+            ? 'Cả tháng sẽ được xếp lại bằng một phương án khác.'
+            : `Chỉ ngày ${from}–${to} được xếp lại; các ngày còn lại giữ nguyên.`}
+        </p>
+        <div className="alert alert-danger" role="alert">
+          Ô chỉnh tay trong khoảng này sẽ mất.
+          {published && ' Lịch đã chốt sẽ về trạng thái bản nháp.'}
+        </div>
+        <div className="flex justify-end gap-2">
+          <button className="btn btn-ghost" onClick={onCancel}>
+            Hủy
+          </button>
+          <button className={`btn ${published ? 'btn-danger-solid' : 'btn-primary'}`} onClick={onConfirm}>
+            Xáo phương án
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* icon nét mảnh 1.6px — cùng ngôn ngữ với các icon khác của app, thay icon mặc định (nét dày) của picker */
+function CalendarIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="3" y="4.5" width="18" height="16" rx="2.5" />
+      <path d="M3 9.5h18M8 2.5v4M16 2.5v4" />
+    </svg>
+  )
+}
+
+function Chevron({ dir }: { dir: 'left' | 'right' }) {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d={dir === 'left' ? 'm15 18-6-6 6-6' : 'm9 18 6-6-6-6'} />
+    </svg>
   )
 }

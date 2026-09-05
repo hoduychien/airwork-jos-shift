@@ -32,7 +32,7 @@ export default function SettingsPage() {
   const num = (v: string) => Math.max(0, Number(v) || 0)
 
   return (
-    <div className="page page-narrow">
+    <div className="page">
       <LoadingBar active={loading || saving} />
       <PageHeader
         title="Cài đặt"

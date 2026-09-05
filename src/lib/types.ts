@@ -123,6 +123,13 @@ export interface SolverInput {
   restMin: number
   restMax: number
   seed: number
+  /**
+   * Chỉ xếp lịch trong khoảng ngày [from..to] (1-based, gồm cả 2 đầu).
+   * Ngày ngoài khoảng giữ nguyên theo `base` (lịch hiện có) hoặc OFF nếu chưa có lịch.
+   */
+  range?: { from: number; to: number }
+  /** lịch hiện có — dùng để giữ các ngày ngoài `range` */
+  base?: ScheduleMatrix
 }
 
 export interface SolverResult {

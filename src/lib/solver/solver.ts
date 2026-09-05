@@ -2061,7 +2061,52 @@ function patternValid(p: boolean[], e: Employee, input: SolverInput): boolean {
 }
 
 // ---------- main ----------
+/**
+ * Xếp lịch cho một KHOẢNG NGÀY trong tháng: giải khoảng đó như một "tháng con" dài L ngày
+ * (ngày nghỉ cố định, số ca tối đa, số ca đêm tối thiểu được co theo tỉ lệ L/D), rồi ghép vào
+ * lịch hiện có — các ngày ngoài khoảng giữ nguyên. Vi phạm được tính lại trên cả tháng để lộ
+ * chỗ nối giữa phần cũ và phần mới (chuyển ca sát nhau, chuỗi quá dài…).
+ */
 export function solve(input: SolverInput): SolverResult {
+  const { range, base, daysInMonth: D, employees } = input
+  if (!range || (range.from <= 1 && range.to >= D)) return solveMonth(input)
+
+  const from = Math.max(1, Math.min(range.from, range.to))
+  const to = Math.min(D, Math.max(range.from, range.to))
+  const L = to - from + 1
+  // co ràng buộc theo tỉ lệ L/D: trần ca làm tròn LÊN (giữ đủ công suất phủ ca), sàn ca đêm làm tròn XUỐNG
+  const subEmployees: Employee[] = employees.map((e) => ({
+    ...e,
+    days_off: e.days_off.filter((d) => d >= from && d <= to).map((d) => d - from + 1),
+    max_shifts_per_month: Math.min(L, Math.ceil((e.max_shifts_per_month * L) / D)),
+    min_night_shifts: e.prefer_night ? Math.min(L, Math.floor((e.min_night_shifts * L) / D)) : 0,
+  }))
+  const sub = solveMonth({ ...input, employees: subEmployees, daysInMonth: L, range: undefined, base: undefined })
+
+  const matrix: ScheduleMatrix = {}
+  for (const e of employees) {
+    const row = new Array<Shift>(D).fill('OFF')
+    const old = base?.[e.id]
+    if (old) for (let d = 0; d < D; d++) row[d] = old[d] ?? 'OFF'
+    const fresh = sub.matrix[e.id]
+    if (fresh) for (let i = 0; i < L; i++) row[from - 1 + i] = fresh[i] ?? 'OFF'
+    matrix[e.id] = row
+  }
+  const violations = validateMatrix({
+    employees,
+    matrix,
+    daysInMonth: D,
+    minPerShift: input.minPerShift,
+    streakMin: input.streakMin,
+    streakMax: input.streakMax,
+    restMax: input.restMax,
+    // ngoài khoảng có thể là OFF (chưa có lịch) → không chấm cân bằng cả tháng
+    skipBalance: !base,
+  })
+  return { ok: violations.length === 0 && sub.conflicts.length === 0, matrix, violations, conflicts: sub.conflicts }
+}
+
+function solveMonth(input: SolverInput): SolverResult {
   const { employees, daysInMonth: D, minPerShift } = input
   const conflicts = diagnose(input)
   const rng = mulberry32(input.seed || 1)
