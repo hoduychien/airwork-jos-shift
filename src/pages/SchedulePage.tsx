@@ -12,6 +12,7 @@ import { useDebounce } from '../hooks/useDebounce'
 // exceljs nặng ~1MB — chỉ tải khi bấm export
 const loadExport = () => import('../lib/export')
 import { store, type StoredSchedule } from '../lib/store'
+import { backupFilename, buildBackup, parseBackup, planRestore } from '../lib/backup'
 import { validateMatrix, violationCellMap } from '../lib/solver/validate'
 import type { Employee, ScheduleMatrix, Settings, Shift } from '../lib/types'
 import { DEFAULT_SETTINGS, WORK_SHIFTS, applyMonthData, daysInMonth } from '../lib/types'
@@ -31,6 +32,9 @@ export default function SchedulePage() {
   const [conflicts, setConflicts] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [exporting, setExporting] = useState(false)
+  // nhập lại lịch từ file sao lưu JSON
+  const importRef = useRef<HTMLInputElement>(null)
+  const [importing, setImporting] = useState(false)
   // 'hard' = đổi tháng / lần đầu (chưa có gì để vẽ → skeleton); 'soft' = tải lại nền (giữ bảng, phủ mờ)
   const [loading, setLoading] = useState<'hard' | 'soft' | null>('hard')
   const [publishing, setPublishing] = useState(false)
@@ -242,6 +246,85 @@ export default function SchedulePage() {
     markSelfWrite()
   }
 
+  /** Sao lưu lịch tháng đang xem ra file JSON (ma trận ca + nhân viên + ô chỉnh tay). */
+  const backup = () => {
+    if (!schedule) return
+    const data = buildBackup({
+      month,
+      year,
+      status: schedule.status,
+      employees,
+      matrix: schedule.matrix,
+      manual: schedule.manual,
+    })
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = backupFilename(month, year)
+    a.click()
+    URL.revokeObjectURL(url)
+    toast(`Đã sao lưu lịch tháng ${month}/${year}.`)
+  }
+
+  /** Nhập lại lịch từ file sao lưu: kiểm tra file, ghép nhân viên, xác nhận rồi ghi đè lịch tháng đó. */
+  const importBackup = async (file: File) => {
+    if (!isAdmin) return
+    setImporting(true)
+    try {
+      const data = parseBackup(await file.text())
+      // nhân viên + ngày nghỉ/prefs của tháng trong file (có thể khác tháng đang xem)
+      const [emps, prefs, offs] = await Promise.all([
+        store.listEmployees(),
+        store.getMonthPrefs(data.month, data.year),
+        store.getDayOffs(data.month, data.year),
+      ])
+      const targetEmployees = applyMonthData(emps, prefs, offs)
+      const plan = planRestore(data, targetEmployees)
+      if (plan.matched.length === 0) throw new Error('Không có nhân viên nào trong file khớp với danh sách hiện tại.')
+      const existing = await store.getSchedule(data.month, data.year)
+      const notes = [
+        `${plan.matched.length} nhân viên khớp.`,
+        plan.missing.length ? `${plan.missing.length} người trong file không còn tồn tại, bỏ qua: ${plan.missing.map((m) => m.code || m.name).join(', ')}.` : '',
+        plan.unmapped.length ? `${plan.unmapped.length} nhân viên hiện tại không có trong file, sẽ toàn OFF: ${plan.unmapped.map((e) => e.name).join(', ')}.` : '',
+        existing
+          ? existing.status === 'published'
+            ? 'Lịch ĐÃ CHỐT của tháng này sẽ bị ghi đè và về bản nháp.'
+            : 'Bản nháp hiện có của tháng này sẽ bị ghi đè.'
+          : 'Tháng này chưa có lịch, sẽ tạo mới ở trạng thái bản nháp.',
+      ].filter(Boolean)
+      const ok = await confirm({
+        title: `Nhập lại lịch tháng ${data.month}/${data.year} từ file?`,
+        message: notes.join(' '),
+        confirmLabel: 'Nhập lại',
+        danger: existing?.status === 'published',
+      })
+      if (!ok) return
+      markSelfWrite()
+      await store.saveSchedule({
+        id: existing?.id ?? `local-${data.year}-${data.month}`,
+        month: data.month,
+        year: data.year,
+        status: 'draft',
+        matrix: plan.matrix,
+        manual: plan.manual,
+      })
+      markSelfWrite()
+      if (data.month !== month || data.year !== year) {
+        setMonth(data.month)
+        setYear(data.year)
+      } else {
+        await load('soft')
+      }
+      setConflicts([])
+      toast(`Đã nhập lại lịch tháng ${data.month}/${data.year} (bản nháp).`)
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Không nhập được file.', 'danger')
+    } finally {
+      setImporting(false)
+    }
+  }
+
   const publish = async () => {
     if (!schedule || !isAdmin) return
     const ok = await confirm({
@@ -447,6 +530,37 @@ export default function SchedulePage() {
           >
             CSV
           </button>
+        </div>
+
+        <div className="btn-group" role="group" aria-label="Sao lưu / nhập lại">
+          <button className="btn btn-ghost" disabled={!schedule} onClick={backup} title="Tải file JSON sao lưu lịch tháng này">
+            Sao lưu
+          </button>
+          {isAdmin && (
+            <>
+              <button
+                className="btn btn-ghost"
+                disabled={busy || importing}
+                data-loading={importing || undefined}
+                onClick={() => importRef.current?.click()}
+                title="Nhập lại lịch từ file sao lưu JSON"
+              >
+                {importing && <Spinner size={12} />}
+                Nhập lại
+              </button>
+              <input
+                ref={importRef}
+                type="file"
+                accept="application/json,.json"
+                hidden
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  e.target.value = ''
+                  if (f) void importBackup(f)
+                }}
+              />
+            </>
+          )}
         </div>
       </div>
 
