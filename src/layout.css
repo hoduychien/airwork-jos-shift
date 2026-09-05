@@ -177,7 +177,7 @@
   max-width: 56rem;
 }
 
-/* ---------- page header — dải mỏng, kẻ đậm; dính ngay dưới thanh trên khi cuộn ---------- */
+/* ---------- page header — dải mỏng, kẻ nhạt; dính ngay dưới thanh trên khi cuộn ---------- */
 .page-head {
   position: sticky;
   top: var(--topbar-h, 3rem);
@@ -192,7 +192,7 @@
   justify-content: space-between;
   gap: var(--space-xs) var(--space-lg);
   padding-bottom: var(--space-sm);
-  border-bottom: 2px solid var(--color-ink);
+  border-bottom: var(--rule-strong);
 }
 .page-head h1 {
   font-size: var(--text-xl);
