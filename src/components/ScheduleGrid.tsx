@@ -15,10 +15,14 @@ interface Props {
   onCellChange: (employeeId: string, day: number, shift: Shift) => void
   /** true → chỉ xem, không mở menu đổi ca (tài khoản không phải admin) */
   readOnly?: boolean
+  /** tháng đã qua: bảng mờ đi, khóa chuột, có nhãn «chỉ xem» */
+  locked?: boolean
   /** hàng được hiển thị (đã lọc theo tên) — dòng tổng vẫn tính trên `employees` */
   visibleEmployees?: Employee[]
   /** chỉ làm nổi ô đúng ca này, ô khác mờ đi */
   shiftFilter?: Shift | null
+  /** ô đã đổi ca (key `${employeeId}:${day}`) → dòng mô tả hiện trong tooltip */
+  swapTips?: Map<string, string>
 }
 
 interface MenuState {
@@ -49,8 +53,10 @@ export default function ScheduleGrid({
   manual,
   onCellChange,
   readOnly = false,
+  locked = false,
   visibleEmployees,
   shiftFilter = null,
+  swapTips,
 }: Props) {
   const rows = visibleEmployees ?? employees
   const [menu, setMenu] = useState<MenuState | null>(null)
@@ -110,7 +116,8 @@ export default function ScheduleGrid({
   const menuShift: Shift = menu ? (matrix[menu.employeeId]?.[menu.day - 1] ?? 'OFF') : 'OFF'
 
   return (
-    <div className="grid-wrap">
+    <div className="grid-wrap" data-locked={locked || undefined} data-readonly={readOnly || undefined}>
+      {locked && <div className="grid-locked-tag">Tháng đã qua · chỉ xem</div>}
       <table className="sched">
         <thead>
           <tr>
@@ -181,6 +188,7 @@ export default function ScheduleGrid({
                   const shift = matrix[e.id]?.[d - 1] ?? 'OFF'
                   const key = keyOf(e.id, d)
                   const viols = violationMap.get(key)
+                  const swapped = swapTips?.get(key)
                   return (
                     <td key={d}>
                       <button
@@ -189,11 +197,19 @@ export default function ScheduleGrid({
                         data-shift={shift}
                         data-violation={viols ? 'true' : undefined}
                         data-manual={manual.has(key) ? 'true' : undefined}
+                        data-swapped={swapped ? 'true' : undefined}
                         data-dim={shiftFilter && shift !== shiftFilter ? 'true' : undefined}
-                        aria-label={`${e.name} — ngày ${d}: ${SHIFT_LABELS[shift]}${viols ? ' (vi phạm)' : ''}`}
+                        aria-label={`${e.name} — ngày ${d}: ${SHIFT_LABELS[shift]}${viols ? ' (vi phạm)' : ''}${swapped ? ' (đã đổi ca)' : ''}`}
                         onClick={(ev) => onCellClick(ev, e, d)}
                         onMouseEnter={(ev) => {
-                          if (viols) setTip({ x: ev.clientX + 10, y: ev.clientY + 12, msgs: viols })
+                          if (viols || swapped) {
+                            setTip({
+                              x: ev.clientX + 10,
+                              y: ev.clientY + 12,
+                              title: swapped ? '⇄ Đã đổi ca' : undefined,
+                              msgs: [...(swapped ? [swapped] : []), ...(viols ?? [])],
+                            })
+                          }
                         }}
                         onMouseLeave={() => setTip(null)}
                       >

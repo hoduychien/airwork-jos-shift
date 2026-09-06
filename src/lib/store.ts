@@ -2,6 +2,9 @@ import { supabase, isLocalMode } from './supabase'
 import { SEED_EMPLOYEES, SEED_SCHEDULE_10_2026, decodeScheduleRow } from './seed'
 import type { Employee, EmployeePrefs, ScheduleMatrix, Settings, Shift } from './types'
 import { DEFAULT_SETTINGS, daysInMonth } from './types'
+import { mergeDaysOff, type LeaveRequest, type LeaveStatus } from './leave'
+import { applySwap, describeCell, overallStatus, type Decision, type Notification, type SwapRequest } from './swap'
+import { listAccounts } from './auth'
 
 /**
  * Data layer trừu tượng: SupabaseStore khi có cấu hình, LocalStore (localStorage)
@@ -37,7 +40,32 @@ export interface Store {
   publish(s: StoredSchedule): Promise<void>
   /** realtime: gọi cb khi lịch bị sửa từ nơi khác. Trả về hàm unsubscribe. */
   subscribe(scheduleId: string, cb: () => void): () => void
+  // ---- xin nghỉ ----
+  listLeaveRequests(month: number, year: number): Promise<LeaveRequest[]>
+  createLeaveRequest(input: Pick<LeaveRequest, 'employee_id' | 'month' | 'year' | 'days' | 'reason'>): Promise<LeaveRequest>
+  /** người gửi rút lại yêu cầu khi còn chờ duyệt */
+  cancelLeaveRequest(id: string): Promise<void>
+  /** PM/admin duyệt hoặc từ chối; duyệt → gộp các ngày vào ngày nghỉ cố định của tháng đó */
+  decideLeaveRequest(id: string, status: Exclude<LeaveStatus, 'pending'>, note?: string): Promise<void>
+  // ---- đổi ca ----
+  listSwapRequests(month: number, year: number): Promise<SwapRequest[]>
+  /** tạo yêu cầu; store tự gửi thông báo tới đồng nghiệp và PM/admin */
+  createSwapRequest(input: SwapInput): Promise<SwapRequest>
+  cancelSwapRequest(id: string): Promise<void>
+  /**
+   * đồng nghiệp (side = 'peer') hoặc PM/admin (side = 'pm') quyết định.
+   * Đủ 2 bên đồng ý → đổi 2 ô trên lịch, đánh dấu chỉnh tay, trạng thái 'approved'.
+   */
+  decideSwapRequest(id: string, side: 'peer' | 'pm', status: Exclude<Decision, 'pending'>, note?: string): Promise<void>
+  // ---- thông báo ----
+  listNotifications(userId: string): Promise<Notification[]>
+  markNotificationsRead(userId: string, ids?: string[]): Promise<void>
 }
+
+export type SwapInput = Pick<
+  SwapRequest,
+  'month' | 'year' | 'requester_id' | 'requester_day' | 'requester_shift' | 'partner_id' | 'partner_day' | 'partner_shift' | 'note'
+>
 
 // ---------------- Local (demo) ----------------
 const LS = {
@@ -47,6 +75,9 @@ const LS = {
   dayoffs: (m: number, y: number) => `shift.dayoffs.${y}-${m}`,
   prefs: (m: number, y: number) => `shift.prefs.${y}-${m}`,
   schedule: (m: number, y: number) => `shift.schedule.${y}-${m}`,
+  leave: 'shift.leave',
+  swaps: 'shift.swaps',
+  notifications: 'shift.notifications',
 }
 
 /** Tăng số này khi seed thay đổi — localStorage cũ sẽ được ghi đè bằng seed mới. */
@@ -169,6 +200,164 @@ class LocalStore implements Store {
   }
   subscribe() {
     return () => {}
+  }
+
+  private allLeave(): LeaveRequest[] {
+    return lsGet<LeaveRequest[]>(LS.leave, [])
+  }
+  async listLeaveRequests(month: number, year: number) {
+    return this.allLeave().filter((r) => r.month === month && r.year === year)
+  }
+  async createLeaveRequest(input: Pick<LeaveRequest, 'employee_id' | 'month' | 'year' | 'days' | 'reason'>) {
+    const req: LeaveRequest = {
+      ...input,
+      id: `leave-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      status: 'pending',
+      created_at: new Date().toISOString(),
+    }
+    lsSet(LS.leave, [...this.allLeave(), req])
+    return req
+  }
+  async cancelLeaveRequest(id: string) {
+    const all = this.allLeave()
+    const r = all.find((x) => x.id === id)
+    if (!r) throw new Error('Yêu cầu không tồn tại.')
+    if (r.status !== 'pending') throw new Error('Yêu cầu đã được xử lý, không rút lại được.')
+    lsSet(LS.leave, all.filter((x) => x.id !== id))
+  }
+  async decideLeaveRequest(id: string, status: Exclude<LeaveStatus, 'pending'>, note?: string) {
+    const all = this.allLeave()
+    const r = all.find((x) => x.id === id)
+    if (!r) throw new Error('Yêu cầu không tồn tại.')
+    if (r.status !== 'pending') throw new Error('Yêu cầu đã được xử lý trước đó.')
+    r.status = status
+    r.decided_at = new Date().toISOString()
+    r.decision_note = note?.trim() || null
+    lsSet(LS.leave, all)
+    if (status === 'approved') {
+      const offs = await this.getDayOffs(r.month, r.year)
+      await this.saveDayOffs(r.employee_id, r.month, r.year, mergeDaysOff(offs[r.employee_id] ?? [], r.days))
+    }
+  }
+
+  // ---- đổi ca (demo) ----
+  private allSwaps(): SwapRequest[] {
+    return lsGet<SwapRequest[]>(LS.swaps, [])
+  }
+  private allNotifications(): Notification[] {
+    return lsGet<Notification[]>(LS.notifications, [])
+  }
+  /** ghi thông báo cho danh sách username (bỏ trùng) */
+  private async notify(userIds: string[], title: string, body: string, link: string) {
+    const ids = [...new Set(userIds.filter(Boolean))]
+    if (ids.length === 0) return
+    const now = new Date().toISOString()
+    const items: Notification[] = ids.map((user_id) => ({
+      id: `n-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      user_id,
+      title,
+      body,
+      link,
+      read: false,
+      created_at: now,
+    }))
+    lsSet(LS.notifications, [...items, ...this.allNotifications()].slice(0, 500))
+  }
+  /** username của tài khoản gắn với nhân viên, và (tuỳ chọn) của mọi admin/PM */
+  private async recipients(employeeIds: string[], includeManagers: boolean): Promise<string[]> {
+    const accounts = await listAccounts()
+    const out: string[] = []
+    for (const a of accounts) {
+      if (a.employeeId && employeeIds.includes(a.employeeId)) out.push(a.username)
+      else if (includeManagers && (a.role === 'admin' || a.role === 'pm')) out.push(a.username)
+    }
+    return out
+  }
+  private async empName(id: string): Promise<string> {
+    return (await this.listEmployees()).find((e) => e.id === id)?.name ?? id
+  }
+  async listSwapRequests(month: number, year: number) {
+    return this.allSwaps().filter((r) => r.month === month && r.year === year)
+  }
+  async createSwapRequest(input: SwapInput) {
+    const req: SwapRequest = {
+      ...input,
+      id: `swap-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      peer_status: 'pending',
+      pm_status: 'pending',
+      status: 'pending',
+      created_at: new Date().toISOString(),
+    }
+    lsSet(LS.swaps, [...this.allSwaps(), req])
+    const [a, b] = await Promise.all([this.empName(req.requester_id), this.empName(req.partner_id)])
+    const body = `${describeCell(req.requester_day, req.requester_shift)} của ${a} ↔ ${describeCell(req.partner_day, req.partner_shift)} của ${b}`
+    await this.notify(await this.recipients([req.partner_id], false), `${a} đề nghị đổi ca với bạn`, body, '/doi-ca')
+    await this.notify(await this.recipients([], true), `${a} đề nghị đổi ca với ${b}`, `${body} — cần PM duyệt.`, '/doi-ca')
+    return req
+  }
+  async cancelSwapRequest(id: string) {
+    const all = this.allSwaps()
+    const r = all.find((x) => x.id === id)
+    if (!r) throw new Error('Yêu cầu không tồn tại.')
+    if (r.status !== 'pending') throw new Error('Yêu cầu đã được xử lý, không rút lại được.')
+    r.status = 'cancelled'
+    lsSet(LS.swaps, all)
+    const a = await this.empName(r.requester_id)
+    await this.notify(
+      await this.recipients([r.partner_id], true),
+      `${a} đã rút yêu cầu đổi ca`,
+      `${describeCell(r.requester_day, r.requester_shift)} ↔ ${describeCell(r.partner_day, r.partner_shift)}`,
+      '/doi-ca',
+    )
+  }
+  async decideSwapRequest(id: string, side: 'peer' | 'pm', status: Exclude<Decision, 'pending'>, note?: string) {
+    const all = this.allSwaps()
+    const r = all.find((x) => x.id === id)
+    if (!r) throw new Error('Yêu cầu không tồn tại.')
+    if (r.status !== 'pending') throw new Error('Yêu cầu đã được xử lý trước đó.')
+    const now = new Date().toISOString()
+    if (side === 'peer') {
+      if (r.peer_status !== 'pending') throw new Error('Đồng nghiệp đã trả lời rồi.')
+      r.peer_status = status
+      r.peer_decided_at = now
+    } else {
+      if (r.pm_status !== 'pending') throw new Error('PM đã quyết định rồi.')
+      r.pm_status = status
+      r.pm_decided_at = now
+    }
+    if (note?.trim()) r.decision_note = note.trim()
+    r.status = overallStatus(r.peer_status, r.pm_status)
+    if (r.status === 'approved') {
+      const sched = await this.getSchedule(r.month, r.year)
+      if (!sched) throw new Error('Không tìm thấy lịch tháng này.')
+      sched.matrix = applySwap(sched.matrix, r)
+      sched.manual.add(`${r.requester_id}:${r.requester_day}`)
+      sched.manual.add(`${r.partner_id}:${r.partner_day}`)
+      await this.saveSchedule(sched)
+      r.applied_at = now
+    }
+    lsSet(LS.swaps, all)
+
+    const [a, b] = await Promise.all([this.empName(r.requester_id), this.empName(r.partner_id)])
+    const pair = `${describeCell(r.requester_day, r.requester_shift)} của ${a} ↔ ${describeCell(r.partner_day, r.partner_shift)} của ${b}`
+    if (r.status === 'approved') {
+      await this.notify(await this.recipients([r.requester_id, r.partner_id], true), 'Đổi ca đã được duyệt — lịch đã cập nhật', pair, '/')
+    } else if (r.status === 'rejected') {
+      const who = side === 'peer' ? b : 'PM'
+      await this.notify(await this.recipients([r.requester_id, r.partner_id], true), `${who} từ chối đổi ca`, pair, '/doi-ca')
+    } else if (side === 'peer') {
+      await this.notify(await this.recipients([r.requester_id], true), `${b} đã đồng ý đổi ca — chờ PM duyệt`, pair, '/doi-ca')
+    } else {
+      await this.notify(await this.recipients([r.requester_id, r.partner_id], false), `PM đã duyệt — chờ ${b} đồng ý`, pair, '/doi-ca')
+    }
+  }
+  async listNotifications(userId: string) {
+    return this.allNotifications().filter((n) => n.user_id === userId)
+  }
+  async markNotificationsRead(userId: string, ids?: string[]) {
+    const all = this.allNotifications()
+    for (const n of all) if (n.user_id === userId && (!ids || ids.includes(n.id))) n.read = true
+    lsSet(LS.notifications, all)
   }
 }
 
@@ -382,6 +571,86 @@ class SupabaseStore implements Store {
     return () => {
       void this.sb.removeChannel(channel)
     }
+  }
+
+  async listLeaveRequests(month: number, year: number) {
+    const { data, error } = await this.sb
+      .from('leave_requests')
+      .select('id, employee_id, month, year, days, reason, status, created_at, decided_at, decision_note')
+      .eq('month', month)
+      .eq('year', year)
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []) as LeaveRequest[]
+  }
+  async createLeaveRequest(input: Pick<LeaveRequest, 'employee_id' | 'month' | 'year' | 'days' | 'reason'>) {
+    const { data, error } = await this.sb
+      .from('leave_requests')
+      .insert({ ...input, status: 'pending' })
+      .select('id, employee_id, month, year, days, reason, status, created_at, decided_at, decision_note')
+      .single()
+    if (error) throw error
+    return data as LeaveRequest
+  }
+  async cancelLeaveRequest(id: string) {
+    const { error } = await this.sb.from('leave_requests').delete().eq('id', id).eq('status', 'pending')
+    if (error) throw error
+  }
+  async decideLeaveRequest(id: string, status: Exclude<LeaveStatus, 'pending'>, note?: string) {
+    // RPC security definer: đổi trạng thái + gộp vào day_off_requests trong một transaction
+    const { error } = await this.sb.rpc('decide_leave_request', {
+      p_id: id,
+      p_status: status,
+      p_note: note?.trim() || null,
+    })
+    if (error) throw error
+  }
+
+  async listSwapRequests(month: number, year: number) {
+    const { data, error } = await this.sb
+      .from('shift_swap_requests')
+      .select('*')
+      .eq('month', month)
+      .eq('year', year)
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []) as SwapRequest[]
+  }
+  async createSwapRequest(input: SwapInput) {
+    // trigger trong DB gửi thông báo cho đồng nghiệp + admin/PM
+    const { data, error } = await this.sb.from('shift_swap_requests').insert(input).select('*').single()
+    if (error) throw error
+    return data as SwapRequest
+  }
+  async cancelSwapRequest(id: string) {
+    const { error } = await this.sb.rpc('cancel_swap_request', { p_id: id })
+    if (error) throw error
+  }
+  async decideSwapRequest(id: string, side: 'peer' | 'pm', status: Exclude<Decision, 'pending'>, note?: string) {
+    // RPC security definer: cập nhật quyết định, đủ 2 bên → đổi ô trên shift_assignments + thông báo
+    const { error } = await this.sb.rpc('decide_swap_request', {
+      p_id: id,
+      p_side: side,
+      p_status: status,
+      p_note: note?.trim() || null,
+    })
+    if (error) throw error
+  }
+  async listNotifications(userId: string) {
+    const { data, error } = await this.sb
+      .from('notifications')
+      .select('id, user_id, title, body, link, read, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(200)
+    if (error) throw error
+    return (data ?? []) as Notification[]
+  }
+  async markNotificationsRead(userId: string, ids?: string[]) {
+    let q = this.sb.from('notifications').update({ read: true }).eq('user_id', userId).eq('read', false)
+    if (ids) q = q.in('id', ids)
+    const { error } = await q
+    if (error) throw error
   }
 }
 

@@ -8,7 +8,11 @@ import SettingsPage from './pages/SettingsPage'
 import LoginPage from './pages/LoginPage'
 import ChangePasswordPage from './pages/ChangePasswordPage'
 import AccountPage from './pages/AccountPage'
-import { HandoverPage, RequestOffPage, ShiftSwapPage } from './pages/PendingPages'
+import RequestOffPage from './pages/RequestOffPage'
+import ShiftSwapPage from './pages/ShiftSwapPage'
+import NotificationsPage from './pages/NotificationsPage'
+import { HandoverPage } from './pages/PendingPages'
+import { NotificationsProvider } from './lib/NotificationsContext'
 import { AppErrorBoundary, ErrorPreviewPage, ForbiddenPage, NotFoundPage, UnavailablePage } from './pages/ErrorPages'
 import { FeedbackProvider } from './components/Feedback'
 
@@ -27,8 +31,9 @@ function Shell() {
   if (user.mustChangePassword) return <ChangePasswordPage forced />
 
   return (
-    <Layout>
-      <Routes>
+    <NotificationsProvider>
+      <Layout>
+        <Routes>
         <Route path="/" element={<SchedulePage />} />
         <Route
           path="/nhan-vien"
@@ -46,17 +51,19 @@ function Shell() {
             </AdminOnly>
           }
         />
-        {/* màn hình chờ ra mắt — chỉ xem, chưa thao tác được */}
         <Route path="/xin-nghi" element={<RequestOffPage />} />
         <Route path="/doi-ca" element={<ShiftSwapPage />} />
+        {/* màn hình chờ ra mắt — chỉ xem, chưa thao tác được */}
         <Route path="/ban-giao" element={<HandoverPage />} />
         <Route path="/tai-khoan" element={<AccountPage />} />
         <Route path="/doi-mat-khau" element={<Navigate to="/tai-khoan" replace />} />
         <Route path="/loi/:code" element={<ErrorPreviewPage />} />
         <Route path="/index.html" element={<Navigate to="/" replace />} />
+        <Route path="/thong-bao" element={<NotificationsPage />} />
         <Route path="*" element={<NotFoundPage />} />
-      </Routes>
-    </Layout>
+        </Routes>
+      </Layout>
+    </NotificationsProvider>
   )
 }
 

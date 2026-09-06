@@ -11,6 +11,12 @@
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
 }
+/* cột nội dung: thanh trên dính + main */
+.content {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
 @media (min-width: 768px) {
   .app {
     grid-template-columns: 14rem minmax(0, 1fr);
@@ -126,13 +132,6 @@
   color: var(--color-ink-3);
   background: var(--color-surface);
 }
-/* mục Tài khoản: mobile nằm cùng hàng với các tab khác */
-.sidenav-account {
-  flex: none;
-}
-.sidenav-user {
-  display: none;
-}
 
 /* --- desktop: cột trái --- */
 @media (min-width: 768px) {
@@ -194,24 +193,6 @@
   .sidenav-soon {
     display: inline-flex;
     margin-left: auto;
-  }
-  /* desktop: mục Tài khoản ghim cuối sidebar, kèm tên đăng nhập nhỏ */
-  .sidenav-account {
-    margin-top: auto;
-    padding-top: var(--space-sm);
-    border-top: var(--rule);
-  }
-  .sidenav-user {
-    display: inline;
-    margin-left: auto;
-    max-width: 6rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-weight: 500;
-    font-size: var(--text-2xs);
-    letter-spacing: 0.02em;
-    text-transform: none;
-    color: var(--color-ink-3);
   }
 }
 .user-tag {
@@ -280,6 +261,209 @@
   text-transform: uppercase;
   text-align: center;
   padding: 0.2rem var(--space-md);
+}
+
+
+/* ---------- topbar — thanh trên cùng cột nội dung, dính khi cuộn ---------- */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  height: 3rem;
+  padding: 0 var(--space-md);
+  background: var(--color-paper);
+  border-bottom: var(--rule-strong);
+}
+.topbar-wordmark {
+  display: flex;
+}
+@media (min-width: 768px) {
+  .topbar {
+    padding: 0 var(--space-lg);
+  }
+  .topbar-wordmark {
+    display: none; /* desktop: sidebar đã có wordmark */
+  }
+}
+.topbar-spacer {
+  flex: 1;
+}
+.topbar-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+.topbar-bell {
+  position: relative;
+}
+.icon-btn[data-active],
+.topbar-user[data-active] {
+  background: var(--color-paper-3);
+  border-color: var(--color-line);
+  color: var(--color-ink);
+}
+.topbar-count {
+  position: absolute;
+  top: -0.2rem;
+  right: -0.2rem;
+  min-width: 1.05rem;
+  height: 1.05rem;
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  background: var(--color-danger);
+  color: white;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 700;
+  line-height: 1.05rem;
+  text-align: center;
+  border: 2px solid var(--color-paper);
+  box-sizing: content-box;
+}
+.topbar-user {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  height: 2rem;
+  padding: 0 0.4rem 0 0.25rem;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--color-ink-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+.topbar-user:hover {
+  background: var(--color-paper-2);
+  border-color: var(--color-line);
+  color: var(--color-ink);
+}
+.topbar-username {
+  max-width: 8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 479px) {
+  .topbar-username {
+    display: none;
+  }
+}
+
+/* ---------- popover — neo dưới nút, canh phải ---------- */
+.popover-anchor {
+  position: relative;
+}
+.popover {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  z-index: 40;
+  width: 16rem;
+  max-width: calc(100vw - 1.5rem);
+  background: var(--color-surface);
+  border: var(--rule-strong);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 30px oklch(0% 0 0 / 0.12);
+  animation: popover-in 120ms var(--ease-out);
+}
+.popover[data-wide] {
+  width: 24rem;
+}
+@keyframes popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .popover {
+    animation: none;
+  }
+}
+.popover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: var(--rule);
+  font-size: var(--text-sm);
+}
+.popover-id {
+  justify-content: flex-start;
+}
+.popover-id .user-avatar {
+  width: 2rem;
+  height: 2rem;
+  font-size: var(--text-xs);
+}
+.popover-scroll {
+  max-height: 22rem;
+  overflow-y: auto;
+}
+.popover-foot {
+  padding: var(--space-xs) var(--space-md);
+  border-top: var(--rule);
+  text-align: center;
+  font-size: var(--text-xs);
+}
+.popover-menu {
+  display: flex;
+  flex-direction: column;
+  padding: 0.3rem;
+}
+.popover-menu a,
+.popover-menu button {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--color-ink);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.popover-menu a:hover,
+.popover-menu button:hover {
+  background: var(--color-paper-2);
+}
+.popover-menu [data-danger] {
+  color: var(--color-danger);
+}
+.link-quiet {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: var(--text-xs);
+  color: var(--color-signal);
+  cursor: pointer;
+  text-decoration: none;
+}
+.link-quiet:hover {
+  text-decoration: underline;
+}
+/* mục thông báo trong popover là <button> */
+button.notif-item {
+  width: 100%;
+  border: 0;
+  border-bottom: var(--rule);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+button.notif-item:last-child {
+  border-bottom: 0;
 }
 
 /* ---------- main & page ---------- */
@@ -1270,6 +1454,170 @@
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   padding: var(--space-md) !important;
+}
+
+/* ---------- trang Xin nghỉ ---------- */
+.leave-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-md);
+  align-items: start;
+}
+@media (min-width: 1024px) {
+  .leave-grid {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  }
+}
+.leave-body {
+  padding: var(--space-md);
+}
+.leave-note {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--color-ink-3);
+  margin: var(--space-sm) 0 0;
+}
+/* lưới chọn ngày theo tuần (CN → T7) */
+.daypick {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.25rem;
+}
+.daypick-dow {
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--color-ink-3);
+  padding-bottom: 0.15rem;
+}
+.daypick-day {
+  border: 1px solid var(--color-line-strong);
+  border-radius: 4px;
+  background: white;
+  color: var(--color-ink-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  padding: 0.35rem 0;
+  text-align: center;
+  cursor: pointer;
+  transition: background-color 120ms, color 120ms;
+}
+.daypick-day[data-weekend] {
+  color: var(--color-ink);
+}
+.daypick-day:hover:not(:disabled) {
+  background: var(--color-paper-3);
+}
+.daypick-day[data-on] {
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+  border-color: var(--color-accent);
+}
+.daypick-day:disabled {
+  cursor: not-allowed;
+}
+.daypick-day[data-fixed] {
+  background: var(--color-paper-3);
+  color: var(--color-ink-3);
+  text-decoration: line-through;
+}
+.daypick-day[data-pending] {
+  background: var(--color-warn-soft);
+  color: var(--color-warn-ink);
+  border-color: transparent;
+}
+.daypick-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.4rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--color-ink-3);
+}
+.daypick-legend i {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 2px;
+  border: 1px solid var(--color-line-strong);
+  background: var(--color-paper-3);
+}
+.daypick-legend i[data-kind='pending'] {
+  background: var(--color-warn-soft);
+  border-color: transparent;
+}
+
+/* ---------- trang Đổi ca ---------- */
+.swap-preview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  border: var(--rule);
+  border-radius: var(--radius-md);
+  background: var(--color-paper-2);
+  font-size: var(--text-sm);
+}
+.swap-preview .eyebrow {
+  display: block;
+  margin-bottom: 0.2rem;
+}
+.swap-arrow {
+  margin: 0 0.4rem;
+  color: var(--color-ink-3);
+}
+
+/* ---------- thông báo ---------- */
+.notif-list {
+  display: flex;
+  flex-direction: column;
+}
+.notif-item {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: flex-start;
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: var(--rule);
+  text-decoration: none;
+  color: inherit;
+}
+.notif-item:last-child {
+  border-bottom: 0;
+}
+.notif-item:hover {
+  background: var(--color-paper-2);
+}
+.notif-item[data-unread] {
+  background: var(--color-signal-soft);
+}
+.notif-dot {
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-top: 0.45rem;
+  border-radius: 50%;
+  background: var(--color-line-strong);
+}
+.notif-item[data-unread] .notif-dot {
+  background: var(--color-signal);
+}
+.notif-title {
+  font-weight: 600;
+  font-size: var(--text-sm);
+}
+.notif-body {
+  font-size: var(--text-xs);
+  color: var(--color-ink-2);
+  margin-top: 0.1rem;
+}
+.notif-time {
+  margin-left: auto;
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--color-ink-3);
 }
 
 /* ---------- trang Tài khoản ---------- */

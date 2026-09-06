@@ -158,3 +158,8 @@ export function daysInMonth(month: number, year: number): number {
 export function weekdayOf(day: number, month: number, year: number): number {
   return new Date(year, month - 1, day).getDay()
 }
+
+/** tháng đã qua (trước tháng hiện tại) → lịch chỉ xem, khóa mọi thao tác ghi */
+export function isPastMonth(month: number, year: number, today: Date = new Date()): boolean {
+  return year * 12 + month < today.getFullYear() * 12 + today.getMonth() + 1
+}

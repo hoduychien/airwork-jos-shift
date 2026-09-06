@@ -2,18 +2,19 @@ import { useLayoutEffect, useRef, type ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
 import { isLocalMode } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
-import { ROLE_LABELS } from '../lib/auth'
+import Topbar from './Topbar'
 
 /* Hallmark · nav: sidebar dọc bên trái (wordmark · links · user) · theme: custom "Console" · designed-as-app
  * Desktop (≥768px): cột trái 14rem dính suốt chiều cao, icon + nhãn.
- * Mobile: thanh tab cố định DƯỚI ĐÁY màn hình, chỉ icon + nhãn nhỏ. */
+ * Mobile: thanh tab cố định DƯỚI ĐÁY màn hình, chỉ icon + nhãn nhỏ.
+ * Thanh trên (Topbar) dính đầu cột nội dung: chuông thông báo + menu tài khoản dạng popover. */
 
-type IconName = 'calendar' | 'calendar-off' | 'swap' | 'handover' | 'users' | 'settings' | 'account'
+type IconName = 'calendar' | 'calendar-off' | 'swap' | 'handover' | 'users' | 'settings'
 
 const NAV: { to: string; label: string; icon: IconName; adminOnly?: boolean; pending?: boolean }[] = [
   { to: '/', label: 'Lịch ca', icon: 'calendar' },
-  { to: '/xin-nghi', label: 'Xin nghỉ', icon: 'calendar-off', pending: true },
-  { to: '/doi-ca', label: 'Đổi ca', icon: 'swap', pending: true },
+  { to: '/xin-nghi', label: 'Xin nghỉ', icon: 'calendar-off' },
+  { to: '/doi-ca', label: 'Đổi ca', icon: 'swap' },
   { to: '/ban-giao', label: 'Bàn giao', icon: 'handover', pending: true },
   { to: '/nhan-vien', label: 'Nhân viên', icon: 'users', adminOnly: true },
   { to: '/cai-dat', label: 'Cài đặt', icon: 'settings', adminOnly: true },
@@ -54,12 +55,6 @@ function Icon({ name }: { name: IconName }) {
         <path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4.5-6.2" />
       </>
     ),
-    account: (
-      <>
-        <circle cx="12" cy="8.5" r="4" />
-        <path d="M4.5 20.5a7.5 7.5 0 0 1 15 0" />
-      </>
-    ),
     settings: (
       <>
         <circle cx="12" cy="12" r="3" />
@@ -86,24 +81,27 @@ function Icon({ name }: { name: IconName }) {
 }
 
 export default function Layout({ children }: { children: ReactNode }) {
-  const { user, isAdmin } = useAuth()
+  const { isAdmin } = useAuth()
   const nav = NAV.filter((item) => !item.adminOnly || isAdmin)
   const barRef = useRef<HTMLElement>(null)
+  const topRef = useRef<HTMLElement>(null)
 
-  // Desktop: sidebar bên trái → không chiếm chỗ trên/dưới nội dung (--topbar-h = 0, --bottombar-h = 0).
-  // Mobile: thanh tab cố định dưới đáy → --bottombar-h = chiều cao thanh để .main chừa chỗ, --topbar-h = 0.
+  // --topbar-h = chiều cao thanh trên (tiêu đề trang dính ngay dưới nó).
+  // Mobile: thanh tab cố định dưới đáy → --bottombar-h = chiều cao thanh để .main chừa chỗ; desktop = 0.
   useLayoutEffect(() => {
-    const el = barRef.current
-    if (!el) return
+    const bar = barRef.current
+    const top = topRef.current
+    if (!bar || !top) return
     const mq = window.matchMedia(DESKTOP)
     const root = document.documentElement.style
     const apply = () => {
-      root.setProperty('--topbar-h', '0px')
-      root.setProperty('--bottombar-h', mq.matches ? '0px' : `${el.offsetHeight}px`)
+      root.setProperty('--topbar-h', `${top.offsetHeight}px`)
+      root.setProperty('--bottombar-h', mq.matches ? '0px' : `${bar.offsetHeight}px`)
     }
     apply()
     const ro = new ResizeObserver(apply)
-    ro.observe(el)
+    ro.observe(bar)
+    ro.observe(top)
     mq.addEventListener('change', apply)
     return () => {
       ro.disconnect()
@@ -147,22 +145,13 @@ export default function Layout({ children }: { children: ReactNode }) {
             ))}
           </nav>
 
-          {/* Tài khoản: thông tin cá nhân · đổi mật khẩu · đăng xuất — một mục, ghim cuối sidebar ở desktop */}
-          <nav className="sidenav sidenav-account" aria-label="Tài khoản">
-            <NavLink
-              to="/tai-khoan"
-              className="sidenav-link"
-              title={user ? `${user.username} · ${ROLE_LABELS[user.role]}` : 'Tài khoản'}
-            >
-              <Icon name="account" />
-              <span className="sidenav-label">Tài khoản</span>
-              {user && <span className="sidenav-user">{user.username}</span>}
-            </NavLink>
-          </nav>
         </div>
       </aside>
 
-      <main className="main">{children}</main>
+      <div className="content">
+        <Topbar ref={topRef} />
+        <main className="main">{children}</main>
+      </div>
     </div>
   )
 }

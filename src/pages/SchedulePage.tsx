@@ -15,9 +15,10 @@ import { store, type StoredSchedule } from '../lib/store'
 import { backupFilename, buildBackup, parseBackup, planRestore } from '../lib/backup'
 import { validateMatrix, violationCellMap } from '../lib/solver/validate'
 import type { Employee, ScheduleMatrix, Settings, Shift } from '../lib/types'
-import { DEFAULT_SETTINGS, WORK_SHIFTS, applyMonthData, daysInMonth } from '../lib/types'
+import { DEFAULT_SETTINGS, WORK_SHIFTS, applyMonthData, daysInMonth, isPastMonth } from '../lib/types'
 import { useAuth } from '../lib/AuthContext'
 import { useFeedback } from '../components/Feedback'
+import { swappedCellTips, type SwapRequest } from '../lib/swap'
 
 const now = new Date()
 
@@ -26,8 +27,12 @@ export default function SchedulePage() {
   const { confirm, toast } = useFeedback()
   const [month, setMonth] = useState(now.getMonth() + 1)
   const [year, setYear] = useState(now.getFullYear())
+  /** tháng đã qua → chỉ xem: không tạo lại, không chỉnh ô, không chốt, không nhập lại */
+  const isPast = isPastMonth(month, year)
+  const canEdit = isAdmin && !isPast
   const [employees, setEmployees] = useState<Employee[]>([])
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS)
+  const [swaps, setSwaps] = useState<SwapRequest[]>([])
   const [schedule, setSchedule] = useState<StoredSchedule | null>(null)
   const [conflicts, setConflicts] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
@@ -74,18 +79,20 @@ export default function SchedulePage() {
     async (mode: 'hard' | 'soft' = 'hard') => {
       setLoading(mode)
       try {
-        const [emps, sets, dayoffs, prefs, sched] = await Promise.all([
+        const [emps, sets, dayoffs, prefs, sched, swapList] = await Promise.all([
           store.listEmployees(),
           store.getSettings(),
           store.getDayOffs(month, year),
           store.getMonthPrefs(month, year),
           store.getSchedule(month, year),
+          store.listSwapRequests(month, year).catch(() => [] as SwapRequest[]),
         ])
         // ràng buộc ca (ưu tiên đêm, cấm ca, tối đa) là thiết lập THEO THÁNG
         const withOffs = applyMonthData(emps, prefs, dayoffs)
         // cập nhật một lượt để React vẽ đúng một lần, tránh nhấp nháy giữa các setState
         setEmployees(withOffs)
         setSettings(sets)
+        setSwaps(swapList)
         // thành viên chỉ xem lịch đã chốt; bản nháp chỉ admin thấy
         setSchedule(sched && (isAdmin || sched.status === 'published') ? sched : null)
         setConflicts([])
@@ -113,6 +120,12 @@ export default function SchedulePage() {
       unsubscribe()
     }
   }, [schedule?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // tooltip «đã đổi ca» trên 2 ô của mỗi yêu cầu đổi ca đã duyệt
+  const swapTips = useMemo(
+    () => swappedCellTips(swaps, (id) => employees.find((e) => e.id === id)?.name ?? '—'),
+    [swaps, employees],
+  )
 
   const matrix: ScheduleMatrix = useMemo(() => {
     if (schedule) return schedule.matrix
@@ -146,6 +159,7 @@ export default function SchedulePage() {
     dayRange: { from: number; to: number } | null = null,
     skipConfirm = false,
   ) => {
+    if (!canEdit) return
     const rangeLabel = rangeLabelOf(dayRange)
     const scope = dayRange ? ` (${rangeLabel})` : ''
     if (schedule && !skipConfirm) {
@@ -225,7 +239,7 @@ export default function SchedulePage() {
   }
 
   const onCellChange = async (employeeId: string, day: number, shift: Shift) => {
-    if (!schedule || !isAdmin) return
+    if (!schedule || !canEdit) return
     const next: StoredSchedule = {
       ...schedule,
       matrix: { ...schedule.matrix, [employeeId]: [...schedule.matrix[employeeId]] },
@@ -269,7 +283,7 @@ export default function SchedulePage() {
 
   /** Nhập lại lịch từ file sao lưu: kiểm tra file, ghép nhân viên, xác nhận rồi ghi đè lịch tháng đó. */
   const importBackup = async (file: File) => {
-    if (!isAdmin) return
+    if (!canEdit) return
     setImporting(true)
     try {
       const data = parseBackup(await file.text())
@@ -326,7 +340,7 @@ export default function SchedulePage() {
   }
 
   const publish = async () => {
-    if (!schedule || !isAdmin) return
+    if (!schedule || !canEdit) return
     const ok = await confirm({
       title: `Chốt lịch tháng ${month}/${year}?`,
       message:
@@ -399,11 +413,14 @@ export default function SchedulePage() {
         title="Lịch ca"
         lede={`${D} ngày · 3 ca/ngày · ≥${settings.min_per_shift} người/ca · đi sớm 10' handover`}
         badge={
-          schedule && (
-            <span className={`badge ${schedule.status === 'published' ? 'badge-published' : 'badge-draft'}`}>
-              {schedule.status === 'published' ? 'Đã chốt' : 'Bản nháp'}
-            </span>
-          )
+          <>
+            {schedule && (
+              <span className={`badge ${schedule.status === 'published' ? 'badge-published' : 'badge-draft'}`}>
+                {schedule.status === 'published' ? 'Đã chốt' : 'Bản nháp'}
+              </span>
+            )}
+            {isPast && <span className="badge">Tháng đã qua · chỉ xem</span>}
+          </>
         }
         actions={
           isAdmin && (
@@ -411,7 +428,8 @@ export default function SchedulePage() {
               <button
                 className="btn btn-primary"
                 onClick={() => generate(false)}
-                disabled={busy || employees.length === 0}
+                disabled={busy || employees.length === 0 || isPast}
+                title={isPast ? 'Tháng đã qua — chỉ xem' : undefined}
                 data-loading={running || undefined}
               >
                 {running && <Spinner size={14} />}
@@ -421,7 +439,8 @@ export default function SchedulePage() {
                 <button
                   className="btn btn-ghost"
                   onClick={publish}
-                  disabled={busy}
+                  disabled={busy || isPast}
+                  title={isPast ? 'Tháng đã qua — chỉ xem' : undefined}
                   data-loading={publishing || undefined}
                 >
                   {publishing && <Spinner size={14} />}
@@ -493,7 +512,8 @@ export default function SchedulePage() {
             <button
               className="btn btn-ghost"
               onClick={() => setRangePick([monthStart, monthEnd])}
-              disabled={busy || employees.length === 0}
+              disabled={busy || employees.length === 0 || isPast}
+              title={isPast ? 'Tháng đã qua — chỉ xem' : undefined}
             >
               Xáo phương án khác
             </button>
@@ -540,10 +560,10 @@ export default function SchedulePage() {
             <>
               <button
                 className="btn btn-ghost"
-                disabled={busy || importing}
+                disabled={busy || importing || isPast}
                 data-loading={importing || undefined}
                 onClick={() => importRef.current?.click()}
-                title="Nhập lại lịch từ file sao lưu JSON"
+                title={isPast ? 'Tháng đã qua — chỉ xem' : 'Nhập lại lịch từ file sao lưu JSON'}
               >
                 {importing && <Spinner size={12} />}
                 Nhập lại
@@ -705,7 +725,9 @@ export default function SchedulePage() {
             violations={violations}
             manual={schedule.manual}
             onCellChange={onCellChange}
-            readOnly={!isAdmin}
+            readOnly={!canEdit}
+            locked={isPast}
+            swapTips={swapTips}
             visibleEmployees={visibleEmployees}
             shiftFilter={shiftFilter}
           />
@@ -716,9 +738,11 @@ export default function SchedulePage() {
             Chưa có lịch cho tháng {month}/{year}
           </p>
           <p style={{ margin: 0, color: 'var(--color-ink-2)', fontSize: 'var(--text-sm)' }}>
-            {isAdmin
-              ? 'Bấm «Tạo lịch tự động» — solver chạy nền, khoảng vài giây.'
-              : 'Lịch tháng này chưa được admin chốt. Vui lòng quay lại sau.'}
+            {isPast
+              ? 'Tháng đã qua — không tạo lịch mới cho tháng này.'
+              : isAdmin
+                ? 'Bấm «Tạo lịch tự động» — solver chạy nền, khoảng vài giây.'
+                : 'Lịch tháng này chưa được admin chốt. Vui lòng quay lại sau.'}
           </p>
         </div>
       )}
@@ -740,7 +764,7 @@ export default function SchedulePage() {
             <strong>{s}</strong> {label}
           </span>
         ))}
-        {isAdmin && (
+        {canEdit && (
           <span className="flex items-center gap-1.5">
             <span
               className="relative inline-block h-3 w-3 rounded-sm"

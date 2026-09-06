@@ -40,6 +40,19 @@ realtime).
   làm ca nên không bao giờ bị xếp ca. Tạo trong trang Nhân viên (mục "Tài khoản
   PM"); chế độ Supabase cần chạy `migrations/005_pm_role.sql` và `006_pm_only_edits_pm.sql`.
   Admin tạo được PM nhưng không sửa được tài khoản PM (đổi vai trò, đặt lại mật khẩu) — chỉ PM mới làm được.
+- **Xin nghỉ**: nhân viên chọn ngày muốn nghỉ cho **tháng sau** (tháng này đã có
+  lịch → dùng Đổi ca), ghi lý do và gửi; admin/PM **Duyệt** → các ngày đó được
+  gộp vào *ngày nghỉ cố định* của tháng, solver tự tôn trọng khi tạo lịch. Có thể
+  rút lại khi còn chờ duyệt. Supabase: bảng `leave_requests` + RPC
+  `decide_leave_request` (`migrations/007_leave_requests.sql`).
+- **Đổi ca**: chỉ trong **tháng hiện tại** (lịch đã chốt, từ hôm nay). Nhân viên chọn
+  1 ca của mình + 1 ca của đồng nghiệp; hệ thống báo trước vi phạm quy tắc nếu đổi.
+  Khi gửi, **đồng nghiệp và PM nhận thông báo**; cần *cả hai* đồng ý thì 2 ô mới
+  đổi trên lịch (đánh dấu chỉnh tay) và hiện dấu `⇄` + tooltip «đã đổi ca với ai».
+  Supabase: bảng `shift_swap_requests`, `notifications`, RPC `decide_swap_request`
+  (`migrations/008_shift_swaps_notifications.sql`).
+- **Thông báo trong app** (chuông trên thanh đầu trang, popup + số chưa đọc; menu tài khoản cũng ở đó): đề nghị đổi ca,
+  kết quả duyệt. Demo: localStorage + poll 20s; Supabase: realtime.
 - **Đăng nhập & phân quyền**: chỉ tài khoản **admin / PM** mới được xếp lịch, chỉnh
   ô, publish, quản lý nhân viên và cài đặt; thành viên chỉ xem lịch đã chốt.
   Chế độ demo: tài khoản = mã nhân viên (gõ `ChienHD` hoặc `ChienHD2` đều
@@ -77,6 +90,8 @@ Mở http://localhost:5173 — dữ liệu mẫu gồm 9 nhân viên (2 người
    - `supabase/migrations/005_pm_role.sql` (vai trò PM — quản lý, không xếp ca)
    - `supabase/migrations/006_pm_only_edits_pm.sql` (chỉ PM mới sửa được tài khoản PM)
    - `supabase/migrations/004_employee_month_settings.sql` (ràng buộc ca theo tháng)
+   - `supabase/migrations/007_leave_requests.sql` (xin nghỉ → duyệt thành ngày nghỉ cố định)
+   - `supabase/migrations/008_shift_swaps_notifications.sql` (đổi ca 2 bên duyệt + thông báo)
    - `supabase/seed.sql` (9 nhân viên mẫu)
 3. **Authentication → Providers → Email**: bật Email provider, **tắt** "Confirm
    email". Tạo tài khoản tại **Authentication → Users → Add user** (email, mật
