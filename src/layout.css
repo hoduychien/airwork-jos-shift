@@ -375,6 +375,21 @@
 .popover[data-wide] {
   width: 24rem;
 }
+/* mobile: nút neo không ở sát mép nên popover dễ tràn khỏi màn — cố định ngang toàn chiều rộng dưới thanh trên */
+@media (max-width: 767px) {
+  .popover,
+  .popover[data-wide] {
+    position: fixed;
+    top: var(--popover-top, calc(var(--topbar-h, 3rem) + 0.4rem));
+    left: 0.75rem;
+    right: 0.75rem;
+    width: auto;
+    max-width: none;
+  }
+  .popover-scroll {
+    max-height: calc(100dvh - var(--topbar-h, 3rem) - 9rem);
+  }
+}
 @keyframes popover-in {
   from {
     opacity: 0;
@@ -1561,8 +1576,18 @@ button.notif-item:last-child {
   font-size: var(--text-sm);
 }
 .swap-preview .eyebrow {
-  display: block;
-  margin-bottom: 0.2rem;
+  display: inline-flex;
+  height: auto;
+  margin-bottom: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  font-size: var(--text-xs);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.swap-preview > div > div {
+  font-size: var(--text-base);
 }
 .swap-arrow {
   margin: 0 0.4rem;

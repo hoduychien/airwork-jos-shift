@@ -65,7 +65,12 @@ export default forwardRef<HTMLElement>(function Topbar(_props, ref) {
 
   if (!user) return null
   const initials = user.username.slice(0, 2).toUpperCase()
-  const toggle = (which: Exclude<Open, null>) => setOpen((o) => (o === which ? null : which))
+  const toggle = (which: Exclude<Open, null>) => {
+    // mobile: popover cố định theo viewport → đo đáy thanh trên lúc mở (có thể có dải demo phía trên)
+    const bar = wrapRef.current?.closest('header')
+    if (bar) wrapRef.current?.style.setProperty('--popover-top', `${bar.getBoundingClientRect().bottom + 6}px`)
+    setOpen((o) => (o === which ? null : which))
+  }
 
   const openItem = (n: Notification) => {
     setOpen(null)

@@ -597,8 +597,8 @@ input[type='number'] {
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  /* 0.15rem + 8px trên/dưới để badge thoáng hơn cạnh tiêu đề */
-  padding: calc(0.15rem + 8px) 0.45rem;
+  /* 0.15rem + 4px trên/dưới để badge thoáng hơn cạnh tiêu đề */
+  padding: calc(0.15rem + 4px) 0.45rem;
   border-radius: 2px;
   border: 1px solid transparent;
 }

@@ -109,6 +109,8 @@ export default function ShiftSwapPage() {
   const myId = user?.employeeId
   const me = employees.find((e) => e.id === myId)
   const nameOf = (id: string) => employees.find((e) => e.id === id)?.name ?? '—'
+  /** "Họ tên · MÃ" cho nhãn trong khung xem trước */
+  const labelOf = (e: Employee | undefined) => (e ? `${e.name} · ${e.code}` : '—')
   const matrix = schedule?.matrix ?? {}
   const shiftAt = (id: string, day: number): Shift | undefined => matrix[id]?.[day - 1]
 
@@ -372,7 +374,7 @@ export default function ShiftSwapPage() {
                 {myShift && partnerShift && (
                   <div className="swap-preview" aria-live="polite">
                     <div>
-                      <span className="eyebrow">Bạn</span>
+                      <span className="eyebrow">{labelOf(me)}</span>
                       <div>
                         <CellText day={myDay} shift={myShift} month={MONTH} year={YEAR} />
                         <span className="swap-arrow">→</span>
@@ -380,7 +382,7 @@ export default function ShiftSwapPage() {
                       </div>
                     </div>
                     <div>
-                      <span className="eyebrow">{nameOf(partnerId)}</span>
+                      <span className="eyebrow">{labelOf(employees.find((e) => e.id === partnerId))}</span>
                       <div>
                         <CellText day={partnerDay} shift={partnerShift} month={MONTH} year={YEAR} />
                         <span className="swap-arrow">→</span>
