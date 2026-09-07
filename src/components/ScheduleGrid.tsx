@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Employee, PerShift, ScheduleMatrix, Shift, Violation } from '../lib/types'
 import { SHIFT_LABELS, WEEKDAY_VI, WORK_SHIFTS, daysInMonth, perShiftLabel, weekdayOf } from '../lib/types'
 
@@ -23,14 +23,11 @@ interface Props {
   shiftFilter?: Shift | null
   /** ô đã đổi ca (key `${employeeId}:${day}`) → dòng mô tả hiện trong tooltip */
   swapTips?: Map<string, string>
-  /**
-   * Xem trước tháng sau: khi bảng hẹp hơn khung (màn rộng), lấp khoảng trống bên phải
-   * bằng vài ngày đầu tháng sau — chỉ xem, không thao tác. `matrix` null = chưa có lịch.
-   */
+  /** xem trước vài ngày đầu tháng sau ở mép phải — chỉ xem, không thao tác. `matrix` null = chưa có lịch */
   nextPreview?: { month: number; year: number; matrix: ScheduleMatrix | null }
 }
 
-/** tối đa số ngày tháng sau hiện thêm — chỉ vài ngày đầu để thấy ca nối tiếp */
+/** số ngày tháng sau hiện thêm — để thấy ca nối tiếp qua tháng */
 const PREVIEW_MAX = 5
 
 interface MenuState {
@@ -68,31 +65,8 @@ export default function ScheduleGrid({
   nextPreview,
 }: Props) {
   const rows = visibleEmployees ?? employees
-  const wrapRef = useRef<HTMLDivElement>(null)
-  const tableRef = useRef<HTMLTableElement>(null)
-  // số ngày tháng sau vừa khít khoảng trống — đo lại khi khung đổi cỡ
-  const [previewDays, setPreviewDays] = useState(0)
-  const nextD = nextPreview ? daysInMonth(nextPreview.month, nextPreview.year) : 0
-  useLayoutEffect(() => {
-    const wrap = wrapRef.current
-    const table = tableRef.current
-    if (!wrap || !table || !nextPreview) return
-    const measure = () => {
-      const col = table.querySelector<HTMLElement>('thead th[data-day]')
-      const colW = col ? col.getBoundingClientRect().width : 0
-      if (colW === 0) return
-      const shown = table.querySelectorAll('thead th[data-preview]').length
-      const baseW = table.getBoundingClientRect().width - shown * colW
-      const free = wrap.clientWidth - baseW
-      // trừ vạch ngăn 2px + chút dư để không sinh thanh cuộn ngang
-      const fit = Math.max(0, Math.min(PREVIEW_MAX, nextD, Math.floor((free - 6) / colW)))
-      setPreviewDays((cur) => (cur === fit ? cur : fit))
-    }
-    measure()
-    const ro = new ResizeObserver(measure)
-    ro.observe(wrap)
-    return () => ro.disconnect()
-  }, [nextPreview, nextD, D, rows.length])
+  // luôn hiện PREVIEW_MAX ngày đầu tháng sau (không quá số ngày tháng đó), mọi cỡ màn hình
+  const previewDays = nextPreview ? Math.min(PREVIEW_MAX, daysInMonth(nextPreview.month, nextPreview.year)) : 0
   const preview = nextPreview && previewDays > 0 ? nextPreview : null
   const pDays = preview ? Array.from({ length: previewDays }, (_, i) => i + 1) : []
   const pCounts = WORK_SHIFTS.map((s) =>
@@ -155,9 +129,9 @@ export default function ScheduleGrid({
   const menuShift: Shift = menu ? (matrix[menu.employeeId]?.[menu.day - 1] ?? 'OFF') : 'OFF'
 
   return (
-    <div ref={wrapRef} className="grid-wrap" data-locked={locked || undefined} data-readonly={readOnly || undefined}>
+    <div className="grid-wrap" data-locked={locked || undefined} data-readonly={readOnly || undefined}>
       {locked && <div className="grid-locked-tag">Tháng đã qua · chỉ xem</div>}
-      <table ref={tableRef} className="sched">
+      <table className="sched">
         <thead>
           <tr>
             <th className="rowhead">Nhân viên</th>
