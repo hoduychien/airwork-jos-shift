@@ -1,7 +1,12 @@
 import { supabase, isLocalMode } from './supabase'
 import { SEED_EMPLOYEES, SEED_SCHEDULE_10_2026, decodeScheduleRow } from './seed'
 import type { Employee, EmployeePrefs, ScheduleMatrix, Settings, Shift } from './types'
-import { daysInMonth, normalizeSettings } from './types'
+import { daysInMonth, isoDate, normalizeSettings } from './types'
+
+const todayIso = () => {
+  const t = new Date()
+  return isoDate(t.getFullYear(), t.getMonth() + 1, t.getDate())
+}
 import { mergeDaysOff, type LeaveRequest, type LeaveStatus } from './leave'
 import { applySwap, describeCell, overallStatus, type Decision, type Notification, type SwapRequest } from './swap'
 import { listAccounts } from './auth'
@@ -119,7 +124,10 @@ class LocalStore implements Store {
 
   async listEmployees(): Promise<Employee[]> {
     const list = lsGet<Employee[] | null>(LS.employees, null)
-    if (list) return list.sort((a, b) => a.display_order - b.display_order)
+    if (list)
+      return list
+        .map((e) => ({ ...e, joined_at: e.joined_at ?? null, left_at: e.left_at ?? null }))
+        .sort((a, b) => a.display_order - b.display_order)
     lsSet(LS.employees, SEED_EMPLOYEES)
     return SEED_EMPLOYEES
   }
@@ -131,9 +139,10 @@ class LocalStore implements Store {
     lsSet(LS.employees, list)
   }
   async deleteEmployee(id: string) {
+    // xóa mềm như Supabase: giữ hồ sơ, đánh dấu nghỉ từ hôm nay
     lsSet(
       LS.employees,
-      (await this.listEmployees()).filter((x) => x.id !== id),
+      (await this.listEmployees()).map((x) => (x.id === id ? { ...x, active: false, left_at: todayIso() } : x)),
     )
   }
   async saveOrder(ids: string[]) {
@@ -374,6 +383,8 @@ interface EmployeeRow {
   no_s3: boolean
   max_shifts_per_month: number
   active: boolean
+  joined_at: string | null
+  left_at: string | null
 }
 
 class SupabaseStore implements Store {
@@ -381,9 +392,10 @@ class SupabaseStore implements Store {
   private sb = supabase!
 
   async listEmployees(): Promise<Employee[]> {
-    const { data, error } = await this.sb.from('employees').select('*').eq('active', true).order('display_order')
+    // trả về cả người đã nghỉ — từng trang tự lọc theo tháng bằng employeesInMonth()
+    const { data, error } = await this.sb.from('employees').select('*').order('display_order')
     if (error) throw error
-    return (data as EmployeeRow[]).map((r) => ({ ...r, days_off: [] }))
+    return (data as EmployeeRow[]).map((r) => ({ ...r, joined_at: r.joined_at ?? null, left_at: r.left_at ?? null, days_off: [] }))
   }
   async upsertEmployee(e: Employee) {
     const { days_off: _ignored, ...row } = e
@@ -391,7 +403,11 @@ class SupabaseStore implements Store {
     if (error) throw error
   }
   async deleteEmployee(id: string) {
-    const { error } = await this.sb.from('employees').update({ active: false }).eq('id', id)
+    // xóa mềm: đánh dấu nghỉ việc từ hôm nay — lịch các tháng trước vẫn giữ nguyên dòng
+    const { error } = await this.sb
+      .from('employees')
+      .update({ active: false, left_at: todayIso() })
+      .eq('id', id)
     if (error) throw error
   }
   async saveOrder(ids: string[]) {

@@ -5,7 +5,7 @@ import { LoadingBar } from '../components/Loading'
 import { useFeedback } from '../components/Feedback'
 import { useAuth } from '../lib/AuthContext'
 import { store } from '../lib/store'
-import { WEEKDAY_VI, daysInMonth, weekdayOf, type Employee } from '../lib/types'
+import { WEEKDAY_VI, daysInMonth, employeesInMonth, weekdayOf, type Employee } from '../lib/types'
 import {
   LEAVE_STATUS_LABELS,
   leaveMonthState,
@@ -83,7 +83,7 @@ export default function RequestOffPage() {
         store.getDayOffs(view.month, view.year),
         store.getSchedule(view.month, view.year),
       ])
-      setEmployees(emps)
+      setEmployees(employeesInMonth(emps, view.month, view.year))
       setRequests(sortLeaveRequests(reqs))
       setFixedOff(offs)
       setPublished(sched?.status === 'published')

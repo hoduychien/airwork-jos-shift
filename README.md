@@ -92,6 +92,7 @@ Mở http://localhost:5173 — dữ liệu mẫu gồm 9 nhân viên (2 người
    - `supabase/migrations/004_employee_month_settings.sql` (ràng buộc ca theo tháng)
    - `supabase/migrations/007_leave_requests.sql` (xin nghỉ → duyệt thành ngày nghỉ cố định)
    - `supabase/migrations/008_shift_swaps_notifications.sql` (đổi ca 2 bên duyệt + thông báo)
+   - `supabase/migrations/009_employee_tenure.sql` (ngày vào làm / nghỉ việc — lịch tháng chỉ gồm người có làm trong tháng)
    - `supabase/seed.sql` (9 nhân viên mẫu)
 3. **Authentication → Providers → Email**: bật Email provider, **tắt** "Confirm
    email". Tạo tài khoản tại **Authentication → Users → Add user** (email, mật

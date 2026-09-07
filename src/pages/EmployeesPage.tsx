@@ -9,11 +9,17 @@ import { useAuth } from '../lib/AuthContext'
 import { useFeedback } from '../components/Feedback'
 import Stepper from '../components/Stepper'
 import type { Employee } from '../lib/types'
-import { applyMonthData, daysInMonth, prefsOf } from '../lib/types'
+import { applyMonthData, daysInMonth, employeesInMonth, hasLeft, isoDate, prefsOf } from '../lib/types'
 
 const now = new Date()
 
-function newEmployee(order: number): Employee {
+const hasLeftFn = (e: Employee) => hasLeft(e)
+const fmtDate = (iso: string) => {
+  const [y, m, d] = iso.split('-')
+  return `${d}/${m}/${y}`
+}
+
+function newEmployee(order: number, month: number, year: number): Employee {
   return {
     id: crypto.randomUUID(),
     name: '',
@@ -26,6 +32,9 @@ function newEmployee(order: number): Employee {
     no_s3: false,
     max_shifts_per_month: 21,
     active: true,
+    // người mới mặc định vào làm từ đầu tháng đang chọn → không xuất hiện ở lịch các tháng trước
+    joined_at: isoDate(year, month, 1),
+    left_at: null,
     days_off: [],
   }
 }
@@ -60,7 +69,8 @@ export default function EmployeesPage() {
         }),
       ])
       setBaseEmployees(emps)
-      setEmployees(applyMonthData(emps, prefs, dayoffs))
+      // chỉ người có làm trong tháng đang chọn (người mới chưa vào / đã nghỉ trước tháng này thì ẩn)
+      setEmployees(applyMonthData(employeesInMonth(emps, month, year), prefs, dayoffs))
       setOverridden(new Set(Object.keys(prefs)))
       setAccounts(accs)
     } finally {
@@ -134,7 +144,8 @@ export default function EmployeesPage() {
       await accountsApi.setEmployee(a.id, employeeId || null)
       if (isMe(a)) await refresh()
     }, `Đã gắn ${a.username} với nhân viên.`)
-  const employeeIds = new Set(employees.map((e) => e.id))
+  // tài khoản gắn với người đã nghỉ / chưa vào tháng này vẫn coi là đã gắn
+  const employeeIds = new Set(baseEmployees.map((e) => e.id))
   const unlinked = accounts.filter((a) => a.role !== 'pm' && (!a.employeeId || !employeeIds.has(a.employeeId)))
   const missingCount = employees.filter((e) => !accountFor(e) && e.code.trim()).length
 
@@ -156,6 +167,8 @@ export default function EmployeesPage() {
               code: e.code,
               display_order: e.display_order,
               active: e.active,
+              joined_at: e.joined_at,
+              left_at: e.left_at,
             }
           : e,
       )
@@ -220,9 +233,10 @@ export default function EmployeesPage() {
 
   const remove = async (e: Employee) => {
     const ok = await confirm({
-      title: `Xóa nhân viên ${e.name}?`,
-      message: 'Người này sẽ không còn xuất hiện trên bảng lịch các tháng sau. Lịch đã chốt không đổi.',
-      confirmLabel: 'Xóa',
+      title: `Cho ${e.name} nghỉ việc?`,
+      message:
+        'Người này được đánh dấu nghỉ việc từ hôm nay: không còn xuất hiện trên lịch các tháng sau, lịch những tháng trước vẫn giữ nguyên dòng. Muốn chọn ngày nghỉ khác, dùng «Sửa» → Ngày nghỉ việc.',
+      confirmLabel: 'Cho nghỉ việc',
       danger: true,
     })
     if (!ok) return
@@ -230,7 +244,7 @@ export default function EmployeesPage() {
     try {
       await store.deleteEmployee(e.id)
       await load()
-      toast(`Đã xóa nhân viên ${e.name}.`)
+      toast(`${e.name} đã được đánh dấu nghỉ việc.`)
     } finally {
       setSaving(false)
     }
@@ -297,7 +311,7 @@ export default function EmployeesPage() {
                 Tạo {missingCount} tài khoản thiếu
               </button>
             )}
-            <button className="btn btn-primary" onClick={() => setEditing(newEmployee(employees.length + 1))}>
+            <button className="btn btn-primary" onClick={() => setEditing(newEmployee(baseEmployees.length + 1, month, year))}>
               + Thêm nhân viên
             </button>
           </>
@@ -335,7 +349,8 @@ export default function EmployeesPage() {
           </span>
         )}
         <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-ink-3)' }}>
-          {employees.length} nhân viên
+          {employees.filter((e) => !hasLeft(e)).length} nhân viên
+          {employees.some(hasLeftFn) ? ` · ${employees.filter(hasLeftFn).length} đã nghỉ` : ''}
           {pmAccounts.length > 0 ? ` · ${pmAccounts.length} PM` : ''}
         </span>
       </div>
@@ -472,6 +487,11 @@ export default function EmployeesPage() {
                               }}
                             >
                               {e.name}
+                              {hasLeft(e) && (
+                                <span className="badge badge-danger" style={{ marginLeft: '0.5em' }}>
+                                  Đã nghỉ {e.left_at ? fmtDate(e.left_at) : ''}
+                                </span>
+                              )}
                             </span>
                             <span
                               className="mono"
@@ -584,9 +604,11 @@ export default function EmployeesPage() {
                             Đặt lại MK
                           </button>
                         )}
-                        <button className="btn btn-danger btn-sm" onClick={() => remove(e)}>
-                          Xóa
-                        </button>
+                        {!hasLeft(e) && (
+                          <button className="btn btn-danger btn-sm" onClick={() => remove(e)}>
+                            Nghỉ việc
+                          </button>
+                        )}
                       </td>
                     </tr>
                   )
@@ -770,6 +792,32 @@ function EmployeeForm({
               <label className="field">
                 <span className="field-label">Mã NV</span>
                 <input className="input" value={e.code} onChange={(ev) => set({ code: ev.target.value })} />
+              </label>
+            </div>
+          )}
+
+          {!isPm && (
+            <div className="grid grid-cols-2 gap-3" style={{ maxWidth: '24rem' }}>
+              <label className="field">
+                <span className="field-label">Ngày vào làm</span>
+                <input
+                  type="date"
+                  className="input"
+                  value={e.joined_at ?? ''}
+                  onChange={(ev) => set({ joined_at: ev.target.value || null })}
+                />
+                <span className="auth-note">Trống = có mặt ở mọi tháng. Tháng trước ngày này sẽ không có dòng của người này.</span>
+              </label>
+              <label className="field">
+                <span className="field-label">Ngày nghỉ việc</span>
+                <input
+                  type="date"
+                  className="input"
+                  value={e.left_at ?? ''}
+                  min={e.joined_at ?? undefined}
+                  onChange={(ev) => set({ left_at: ev.target.value || null, active: !ev.target.value })}
+                />
+                <span className="auth-note">Trống = còn làm. Lịch từ tháng sau ngày này sẽ không còn người này.</span>
               </label>
             </div>
           )}

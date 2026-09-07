@@ -12,6 +12,7 @@ import {
   SHIFT_LABELS,
   WEEKDAY_VI,
   daysInMonth,
+  employeesInMonth,
   weekdayOf,
   type Employee,
   type Settings,
@@ -91,7 +92,7 @@ export default function ShiftSwapPage() {
         store.getSchedule(MONTH, YEAR),
         store.listSwapRequests(MONTH, YEAR),
       ])
-      setEmployees(emps)
+      setEmployees(employeesInMonth(emps, MONTH, YEAR))
       setSettings(sets)
       setSchedule(sched && sched.status === 'published' ? sched : null)
       setRequests(sortSwapRequests(reqs))

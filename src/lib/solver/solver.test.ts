@@ -250,6 +250,8 @@ describe('solver — số người khác nhau theo ca (S1=3, S2=3, S3=2)', () =>
     no_s3: false,
     max_shifts_per_month: 22,
     active: true,
+    joined_at: null,
+    left_at: null,
     days_off: [],
   }))
   const input = makeInput({

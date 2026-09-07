@@ -15,7 +15,7 @@ import { store, type StoredSchedule } from '../lib/store'
 import { backupFilename, buildBackup, parseBackup, planRestore } from '../lib/backup'
 import { validateMatrix, violationCellMap } from '../lib/solver/validate'
 import type { Employee, ScheduleMatrix, Settings, Shift } from '../lib/types'
-import { DEFAULT_SETTINGS, WORK_SHIFTS, applyMonthData, daysInMonth, isPastMonth, perShiftLabel } from '../lib/types'
+import { DEFAULT_SETTINGS, WORK_SHIFTS, applyMonthData, daysInMonth, employeesInMonth, isPastMonth, perShiftLabel } from '../lib/types'
 import { useAuth } from '../lib/AuthContext'
 import { useFeedback } from '../components/Feedback'
 import { swappedCellTips, type SwapRequest } from '../lib/swap'
@@ -88,7 +88,8 @@ export default function SchedulePage() {
           store.listSwapRequests(month, year).catch(() => [] as SwapRequest[]),
         ])
         // ràng buộc ca (ưu tiên đêm, cấm ca, tối đa) là thiết lập THEO THÁNG
-        const withOffs = applyMonthData(emps, prefs, dayoffs)
+        // chỉ người có làm trong tháng này (theo ngày vào/nghỉ việc) mới có dòng trên lịch
+        const withOffs = applyMonthData(employeesInMonth(emps, month, year), prefs, dayoffs)
         // cập nhật một lượt để React vẽ đúng một lần, tránh nhấp nháy giữa các setState
         setEmployees(withOffs)
         setSettings(sets)
@@ -293,7 +294,7 @@ export default function SchedulePage() {
         store.getMonthPrefs(data.month, data.year),
         store.getDayOffs(data.month, data.year),
       ])
-      const targetEmployees = applyMonthData(emps, prefs, offs)
+      const targetEmployees = applyMonthData(employeesInMonth(emps, data.month, data.year), prefs, offs)
       const plan = planRestore(data, targetEmployees)
       if (plan.matched.length === 0) throw new Error('Không có nhân viên nào trong file khớp với danh sách hiện tại.')
       const existing = await store.getSchedule(data.month, data.year)

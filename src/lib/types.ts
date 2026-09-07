@@ -15,9 +15,37 @@ export interface Employee {
   no_s3: boolean
   max_shifts_per_month: number
   active: boolean
+  /** ngày vào làm (YYYY-MM-DD) — null: làm từ đầu, hiện ở mọi tháng */
+  joined_at: string | null
+  /** ngày nghỉ việc (YYYY-MM-DD) — null: còn làm */
+  left_at: string | null
   /** ngày nghỉ cố định đăng ký cho tháng đang xem (1-based) */
   days_off: number[]
 }
+
+/** YYYY-MM-DD của ngày `day` trong tháng */
+export const isoDate = (year: number, month: number, day: number): string =>
+  `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+
+/**
+ * Nhân viên có làm việc trong tháng không — quyết định người đó có dòng trên lịch tháng đó.
+ * Vào làm ≤ ngày cuối tháng và (chưa nghỉ hoặc nghỉ ≥ ngày đầu tháng).
+ * Dữ liệu cũ đã xóa (active=false) mà không có ngày nghỉ → coi như đã nghỉ, ẩn ở mọi tháng.
+ */
+export function worksInMonth(e: Pick<Employee, 'active' | 'joined_at' | 'left_at'>, month: number, year: number): boolean {
+  const first = isoDate(year, month, 1)
+  const last = isoDate(year, month, daysInMonth(month, year))
+  if (e.joined_at && e.joined_at > last) return false
+  if (e.left_at) return e.left_at >= first
+  return e.active
+}
+
+export const employeesInMonth = (list: Employee[], month: number, year: number): Employee[] =>
+  list.filter((e) => worksInMonth(e, month, year))
+
+/** đã nghỉ việc tính đến hôm nay */
+export const hasLeft = (e: Pick<Employee, 'active' | 'left_at'>, today = new Date()): boolean =>
+  e.left_at ? e.left_at < isoDate(today.getFullYear(), today.getMonth() + 1, today.getDate()) : !e.active
 
 /** Thiết lập ràng buộc ca THEO THÁNG — tháng chưa cấu hình dùng giá trị mặc định trên hồ sơ */
 export interface EmployeePrefs {

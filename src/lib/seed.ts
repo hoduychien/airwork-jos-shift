@@ -6,15 +6,15 @@ import type { Employee, Shift } from './types'
  * QuanPD7 không làm ca đêm.
  */
 export const SEED_EMPLOYEES: Employee[] = [
-  { id: 'e1', name: 'QuangPK1', code: 'QuangPK1', display_order: 1, prefer_night: true, min_night_shifts: 16, no_s1: false, no_s2: false, no_s3: false, max_shifts_per_month: 21, active: true, days_off: [] },
-  { id: 'e2', name: 'VuNL4', code: 'VuNL4', display_order: 2, prefer_night: false, min_night_shifts: 0, no_s1: false, no_s2: false, no_s3: false, max_shifts_per_month: 21, active: true, days_off: [] },
-  { id: 'e3', name: 'TruongPT16', code: 'TruongPT16', display_order: 3, prefer_night: false, min_night_shifts: 0, no_s1: false, no_s2: false, no_s3: false, max_shifts_per_month: 21, active: true, days_off: [] },
-  { id: 'e4', name: 'HungLQ33', code: 'HungLQ33', display_order: 4, prefer_night: false, min_night_shifts: 0, no_s1: false, no_s2: false, no_s3: false, max_shifts_per_month: 21, active: true, days_off: [] },
-  { id: 'e5', name: 'ChienHD2', code: 'ChienHD2', display_order: 5, prefer_night: true, min_night_shifts: 16, no_s1: false, no_s2: false, no_s3: false, max_shifts_per_month: 21, active: true, days_off: [] },
-  { id: 'e6', name: 'QuanPD7', code: 'QuanPD7', display_order: 6, prefer_night: false, min_night_shifts: 0, no_s1: false, no_s2: false, no_s3: true, max_shifts_per_month: 21, active: true, days_off: [] },
-  { id: 'e7', name: 'AnhND191', code: 'AnhND191', display_order: 7, prefer_night: false, min_night_shifts: 0, no_s1: false, no_s2: false, no_s3: false, max_shifts_per_month: 21, active: true, days_off: [] },
-  { id: 'e8', name: 'ThongDV3', code: 'ThongDV3', display_order: 8, prefer_night: false, min_night_shifts: 0, no_s1: false, no_s2: false, no_s3: false, max_shifts_per_month: 21, active: true, days_off: [] },
-  { id: 'e9', name: 'ThaiDTD1', code: 'ThaiDTD1', display_order: 9, prefer_night: false, min_night_shifts: 0, no_s1: false, no_s2: false, no_s3: false, max_shifts_per_month: 21, active: true, days_off: [] },
+  { id: 'e1', name: 'QuangPK1', code: 'QuangPK1', display_order: 1, prefer_night: true, min_night_shifts: 16, no_s1: false, no_s2: false, no_s3: false, max_shifts_per_month: 21, active: true, joined_at: null, left_at: null, days_off: [] },
+  { id: 'e2', name: 'VuNL4', code: 'VuNL4', display_order: 2, prefer_night: false, min_night_shifts: 0, no_s1: false, no_s2: false, no_s3: false, max_shifts_per_month: 21, active: true, joined_at: null, left_at: null, days_off: [] },
+  { id: 'e3', name: 'TruongPT16', code: 'TruongPT16', display_order: 3, prefer_night: false, min_night_shifts: 0, no_s1: false, no_s2: false, no_s3: false, max_shifts_per_month: 21, active: true, joined_at: null, left_at: null, days_off: [] },
+  { id: 'e4', name: 'HungLQ33', code: 'HungLQ33', display_order: 4, prefer_night: false, min_night_shifts: 0, no_s1: false, no_s2: false, no_s3: false, max_shifts_per_month: 21, active: true, joined_at: null, left_at: null, days_off: [] },
+  { id: 'e5', name: 'ChienHD2', code: 'ChienHD2', display_order: 5, prefer_night: true, min_night_shifts: 16, no_s1: false, no_s2: false, no_s3: false, max_shifts_per_month: 21, active: true, joined_at: null, left_at: null, days_off: [] },
+  { id: 'e6', name: 'QuanPD7', code: 'QuanPD7', display_order: 6, prefer_night: false, min_night_shifts: 0, no_s1: false, no_s2: false, no_s3: true, max_shifts_per_month: 21, active: true, joined_at: null, left_at: null, days_off: [] },
+  { id: 'e7', name: 'AnhND191', code: 'AnhND191', display_order: 7, prefer_night: false, min_night_shifts: 0, no_s1: false, no_s2: false, no_s3: false, max_shifts_per_month: 21, active: true, joined_at: null, left_at: null, days_off: [] },
+  { id: 'e8', name: 'ThongDV3', code: 'ThongDV3', display_order: 8, prefer_night: false, min_night_shifts: 0, no_s1: false, no_s2: false, no_s3: false, max_shifts_per_month: 21, active: true, joined_at: null, left_at: null, days_off: [] },
+  { id: 'e9', name: 'ThaiDTD1', code: 'ThaiDTD1', display_order: 9, prefer_night: false, min_night_shifts: 0, no_s1: false, no_s2: false, no_s3: false, max_shifts_per_month: 21, active: true, joined_at: null, left_at: null, days_off: [] },
 ]
 
 /**
