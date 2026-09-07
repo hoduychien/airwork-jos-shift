@@ -53,6 +53,8 @@ export default function EmployeesPage() {
   const [overridden, setOverridden] = useState<Set<string>>(new Set())
   // tài khoản đăng nhập gắn với từng nhân viên (vai trò, mật khẩu) — quản lý ngay tại đây
   const { user, refresh } = useAuth()
+  // cho nghỉ việc / đặt ngày nghỉ việc: chỉ tài khoản PM
+  const isPmUser = user?.role === 'pm'
   const { confirm, toast } = useFeedback()
   const [accounts, setAccounts] = useState<AccountInfo[]>([])
   const [accError, setAccError] = useState('')
@@ -233,11 +235,29 @@ export default function EmployeesPage() {
   }
 
   const remove = async (e: Employee) => {
+    if (!isPmUser) {
+      toast('Chỉ tài khoản PM mới được cho nhân viên nghỉ việc.', 'danger')
+      return
+    }
     const ok = await confirm({
-      title: `Cho ${e.name} nghỉ việc?`,
-      message:
-        'Người này được đánh dấu nghỉ việc từ hôm nay: không còn xuất hiện trên lịch các tháng sau, lịch những tháng trước vẫn giữ nguyên dòng. Muốn chọn ngày nghỉ khác, dùng «Sửa» → Ngày nghỉ việc.',
-      confirmLabel: 'Cho nghỉ việc',
+      title: `Cảnh báo — cho ${e.name} nghỉ việc?`,
+      message: (
+        <>
+          <p style={{ margin: 0 }}>
+            <strong>{e.name}</strong> sẽ được đánh dấu nghỉ việc từ <strong>hôm nay</strong>:
+          </p>
+          <ul style={{ margin: 'var(--space-xs) 0 0', paddingLeft: '1.2em' }}>
+            <li>Biến mất khỏi bảng lịch, xin nghỉ, đổi ca của các tháng sau.</li>
+            <li>Lịch những tháng trước vẫn giữ nguyên dòng của người này.</li>
+            <li>Tài khoản đăng nhập vẫn còn, cần khoá riêng nếu muốn.</li>
+          </ul>
+          <p style={{ margin: 'var(--space-xs) 0 0' }}>
+            Muốn chọn ngày nghỉ khác hôm nay, dùng «Sửa» → Ngày nghỉ việc. Thao tác này chỉ PM thực hiện được.
+          </p>
+        </>
+      ),
+      confirmLabel: 'Tôi hiểu, cho nghỉ việc',
+      cancelLabel: 'Huỷ',
       danger: true,
     })
     if (!ok) return
@@ -605,7 +625,7 @@ export default function EmployeesPage() {
                             Đặt lại MK
                           </button>
                         )}
-                        {!hasLeft(e) && (
+                        {!hasLeft(e) && isPmUser && (
                           <button className="btn btn-danger btn-sm" onClick={() => remove(e)}>
                             Nghỉ việc
                           </button>
@@ -698,6 +718,7 @@ export default function EmployeesPage() {
           onSave={save}
           onSavePm={createPm}
           onCancel={() => setEditing(null)}
+          canSetLeave={isPmUser}
         />
       )}
     </div>
@@ -712,8 +733,11 @@ function EmployeeForm({
   onSave,
   onSavePm,
   onCancel,
+  canSetLeave,
 }: {
   employee: Employee
+  /** chỉ PM được đặt/đổi ngày nghỉ việc */
+  canSetLeave: boolean
   /** đang thêm mới → cho phép chọn "Tạo tài khoản PM" thay vì nhân viên làm ca */
   isNew: boolean
   month: number
@@ -814,10 +838,15 @@ function EmployeeForm({
                 <DateField
                   value={e.left_at}
                   min={e.joined_at}
+                  disabled={!canSetLeave}
                   aria-label="Ngày nghỉ việc"
                   onChange={(v) => set({ left_at: v, active: !v })}
                 />
-                <span className="auth-note">Trống = còn làm. Lịch từ tháng sau ngày này sẽ không còn người này.</span>
+                <span className="auth-note">
+                  {canSetLeave
+                    ? 'Trống = còn làm. Lịch từ tháng sau ngày này sẽ không còn người này.'
+                    : 'Chỉ tài khoản PM mới được đặt ngày nghỉ việc.'}
+                </span>
               </label>
             </div>
           )}
