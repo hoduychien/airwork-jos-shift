@@ -1,4 +1,4 @@
-import Select from 'react-select'
+import Select, { components, type DropdownIndicatorProps } from 'react-select'
 
 /** menu vừa mở → cuộn option đang chọn vào giữa danh sách (menu render trong body nên tìm theo class) */
 function scrollSelectedIntoView() {
@@ -9,6 +9,17 @@ function scrollSelectedIntoView() {
     const top = sel.offsetTop - (list.clientHeight - sel.offsetHeight) / 2
     list.scrollTop = Math.max(0, top)
   })
+}
+
+/** chevron nét mảnh 1.8px — thay icon mặc định (nét dày) của react-select */
+function DropdownIndicator<T extends string | number>(props: DropdownIndicatorProps<Option<T>, false>) {
+  return (
+    <components.DropdownIndicator {...props}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="m6 9 6 6 6-6" />
+      </svg>
+    </components.DropdownIndicator>
+  )
 }
 
 /* Hallmark · component: select · theme: Cobalt — react-select style qua token,
@@ -51,6 +62,7 @@ export default function AppSelect<T extends string | number>({
       isSearchable={false}
       classNamePrefix="app-select"
       onMenuOpen={scrollSelectedIntoView}
+      components={{ DropdownIndicator }}
       // menu render trong body để không bị bảng lịch (overflow) cắt mất
       menuPortalTarget={document.body}
       styles={{
@@ -73,7 +85,7 @@ export default function AppSelect<T extends string | number>({
         indicatorSeparator: () => ({ display: 'none' }),
         dropdownIndicator: (base, state) => ({
           ...base,
-          padding: '0 0.5rem',
+          padding: '0 0.55rem',
           color: 'var(--color-ink-3)',
           transform: state.selectProps.menuIsOpen ? 'rotate(180deg)' : undefined,
           transition: 'transform var(--dur-base) var(--ease-out)',
