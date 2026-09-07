@@ -1,5 +1,6 @@
 import type {
   Employee,
+  PerShift,
   ScheduleMatrix,
   Shift,
   Violation,
@@ -10,7 +11,8 @@ export interface ValidateOptions {
   employees: Employee[]
   matrix: ScheduleMatrix
   daysInMonth: number
-  minPerShift: number
+  /** số người cần có ở từng ca */
+  minPerShift: PerShift
   streakMin: number
   streakMax: number
   restMax: number
@@ -166,12 +168,12 @@ export function validateMatrix(opts: ValidateOptions): Violation[] {
       for (const emp of employees) {
         if (matrix[emp.id]?.[day] === s) n++
       }
-      if (n < minPerShift) {
+      if (n < minPerShift[s]) {
         out.push({
           type: 'coverage',
           day: day + 1,
           shift: s,
-          message: `Ngày ${day + 1}: ${SHIFT_VI[s]} chỉ có ${n}/${minPerShift} người.`,
+          message: `Ngày ${day + 1}: ${SHIFT_VI[s]} chỉ có ${n}/${minPerShift[s]} người.`,
         })
       }
     }

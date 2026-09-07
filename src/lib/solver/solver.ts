@@ -1,12 +1,13 @@
 import type {
   Employee,
+  PerShift,
   ScheduleMatrix,
   Shift,
   SolverInput,
   SolverResult,
   WorkShift,
 } from '../types'
-import { WORK_SHIFTS } from '../types'
+import { WORK_SHIFTS, needPerDay } from '../types'
 import { evaluateFairness, evaluateFairnessMatrix, fairnessPolish, isNightEmployee, allowedShiftsOf } from './fairness'
 import { validateMatrix } from './validate'
 
@@ -52,13 +53,14 @@ function shuffled<T>(arr: T[], rng: Rng): T[] {
 function diagnose(input: SolverInput): string[] {
   const { employees, daysInMonth: D, minPerShift } = input
   const conflicts: string[] = []
-  const needTotal = 3 * minPerShift * D
+  const perDay = needPerDay(minPerShift)
+  const needTotal = perDay * D
 
   const cap = (e: Employee) => Math.min(e.max_shifts_per_month, D - e.days_off.length)
   const capTotal = employees.reduce((s, e) => s + cap(e), 0)
   if (capTotal < needTotal) {
     conflicts.push(
-      `Tổng công suất ${capTotal} ca < ${needTotal} ca cần thiết (${minPerShift} người × 3 ca × ${D} ngày). Tăng số nhân viên, tăng "số ca tối đa/tháng" hoặc giảm mức tối thiểu mỗi ca.`,
+      `Tổng công suất ${capTotal} ca < ${needTotal} ca cần thiết (${minPerShift.S1} + ${minPerShift.S2} + ${minPerShift.S3} người/ngày × ${D} ngày). Tăng số nhân viên, tăng "số ca tối đa/tháng" hoặc giảm số người mỗi ca.`,
     )
   }
 
@@ -66,15 +68,15 @@ function diagnose(input: SolverInput): string[] {
     const allowed = employees.filter(
       (e) => !((s === 'S1' && e.no_s1) || (s === 'S2' && e.no_s2) || (s === 'S3' && e.no_s3)),
     )
-    if (allowed.length < minPerShift) {
+    if (allowed.length < minPerShift[s]) {
       conflicts.push(
-        `Chỉ có ${allowed.length} người được phép làm ${s} nhưng mỗi ngày cần tối thiểu ${minPerShift} người. Bỏ bớt ràng buộc "không làm ${s}" hoặc giảm mức tối thiểu.`,
+        `Chỉ có ${allowed.length} người được phép làm ${s} nhưng mỗi ngày cần tối thiểu ${minPerShift[s]} người. Bỏ bớt ràng buộc "không làm ${s}" hoặc giảm số người ca ${s}.`,
       )
     } else {
       const capAllowed = allowed.reduce((sum, e) => sum + cap(e), 0)
-      if (capAllowed < minPerShift * D) {
+      if (capAllowed < minPerShift[s] * D) {
         conflicts.push(
-          `Nhóm được phép làm ${s} (${allowed.length} người) chỉ gánh được tối đa ${capAllowed} ca, cần ${minPerShift * D} ca ${s}/tháng.`,
+          `Nhóm được phép làm ${s} (${allowed.length} người) chỉ gánh được tối đa ${capAllowed} ca, cần ${minPerShift[s] * D} ca ${s}/tháng.`,
         )
       }
     }
@@ -82,9 +84,9 @@ function diagnose(input: SolverInput): string[] {
 
   for (let d = 1; d <= D; d++) {
     const avail = employees.filter((e) => !e.days_off.includes(d)).length
-    if (avail < 3 * minPerShift) {
+    if (avail < perDay) {
       conflicts.push(
-        `Ngày ${d}: chỉ còn ${avail} người có thể đi làm (do nghỉ cố định) — cần ${3 * minPerShift} người/ngày.`,
+        `Ngày ${d}: chỉ còn ${avail} người có thể đi làm (do nghỉ cố định) — cần ${perDay} người/ngày.`,
       )
     }
   }
@@ -140,7 +142,7 @@ function buildPattern(
   D: number,
   target: number,
   fixedOff: Set<number>, // 1-based days
-  colDeficit: number[], // needPerDay - colCount[d], càng cao càng nên phủ
+  colDeficit: number[], // perDay - colCount[d], càng cao càng nên phủ
   opts: {
     streakMin: number
     streakMax: number
@@ -322,7 +324,7 @@ function assignShifts(
   blocks: Block[],
   employees: Employee[],
   D: number,
-  minPer: number,
+  minPer: PerShift,
   rng: Rng,
   initialShifts?: (Shift | null)[],
 ): Phase2Result {
@@ -411,7 +413,7 @@ function assignShifts(
     let c = 0
     for (const s of WORK_SHIFTS) {
       for (let d = 0; d < D; d++) {
-        const deficit = minPer - count[s][d]
+        const deficit = minPer[s] - count[s][d]
         if (deficit > 0) c += deficit * deficit * 100
       }
     }
@@ -424,7 +426,7 @@ function assignShifts(
       }
     })
     // rule chia đều: từng loại ca trong từng nhóm nhân viên không làm đêm + |S1−S2| mỗi người
-    const fair = evaluateFairness(employees, (e) => perEmp[empIndex.get(e.id)!])
+    const fair = evaluateFairness(employees, (e) => perEmp[empIndex.get(e.id)!], minPer)
     c += fair.hard * 12 + fair.soft * 0.3
     return c
   }
@@ -569,7 +571,7 @@ function assignShifts(
     })
   }
   function fixDeficit(day: number, sNeed: WorkShift, depth: number, visited: Set<number>): boolean {
-    if (count[sNeed][day] >= minPer) return true
+    if (count[sNeed][day] >= minPer[sNeed]) return true
     if (depth > 6) return false
     for (const bi of shuffled(blocks.map((_, i) => i), rng)) {
       const b = blocks[bi]
@@ -587,7 +589,7 @@ function assignShifts(
       let ok = prefViol(b.empIdx) <= violBefore
       if (ok) {
         for (let k = b.start; k < b.start + b.len && ok; k++) {
-          if (count[sOld as WorkShift][k] < minPer) {
+          if (count[sOld as WorkShift][k] < minPer[sOld as WorkShift]) {
             ok = fixDeficit(k, sOld as WorkShift, depth + 1, visited)
           }
         }
@@ -603,7 +605,7 @@ function assignShifts(
       let anyDeficit = false
       for (const s of WORK_SHIFTS) {
         for (let d = 0; d < D; d++) {
-          if (count[s][d] < minPer) {
+          if (count[s][d] < minPer[s]) {
             anyDeficit = true
             fixDeficit(d, s, 0, new Set())
           }
@@ -638,7 +640,7 @@ function assignShifts(
           let ok = true
           const b = blocks[bi]
           for (let k = b.start; k < b.start + b.len && ok; k++) {
-            if (count[sOld][k] < minPer) ok = fixDeficit(k, sOld, 0, new Set([bi]))
+            if (count[sOld][k] < minPer[sOld]) ok = fixDeficit(k, sOld, 0, new Set([bi]))
           }
           if (!ok) restore(snap)
         }
@@ -666,7 +668,7 @@ function assignShifts(
           let ok = true
           const b = blocks[bi]
           for (let k = b.start; k < b.start + b.len && ok; k++) {
-            if (count[sOld][k] < minPer) ok = fixDeficit(k, sOld, 0, new Set([bi]))
+            if (count[sOld][k] < minPer[sOld]) ok = fixDeficit(k, sOld, 0, new Set([bi]))
           }
           if (ok && perEmp[ei][sNeed] >= 2) break
           restore(snap)
@@ -691,7 +693,7 @@ function assignShifts(
     const noDeficitIn = (bi: number): boolean => {
       const b = blocks[bi]
       for (let d = b.start; d < b.start + b.len; d++) {
-        for (const t of WORK_SHIFTS) if (count[t][d] < minPer) return false
+        for (const t of WORK_SHIFTS) if (count[t][d] < minPer[t]) return false
       }
       return true
     }
@@ -790,10 +792,11 @@ function assignShifts(
     }
     // ngày nào không thể đủ người ngay từ pattern thì bỏ qua kiểm tra (phase 1 sẽ bị validator bắt)
     const dayCheckable = new Array<boolean>(D).fill(true)
-    for (let d = 0; d < D; d++) if (remCover[d] < 3 * minPer) dayCheckable[d] = false
+    const perDay = needPerDay(minPer)
+    for (let d = 0; d < D; d++) if (remCover[d] < perDay) dayCheckable[d] = false
 
     const dayOk = (d: number) =>
-      !dayCheckable[d] || WORK_SHIFTS.every((s) => cnt[s][d] >= minPer)
+      !dayCheckable[d] || WORK_SHIFTS.every((s) => cnt[s][d] >= minPer[s])
 
     let nodes = 0
     const LIMIT = 150000
@@ -838,7 +841,7 @@ function assignShifts(
         .map((s) => {
           let sc = rng() * 2
           for (let d = b.start; d < b.start + b.len; d++) {
-            const deficit = minPer - cnt[s][d]
+            const deficit = minPer[s] - cnt[s][d]
             if (deficit > 0) sc += deficit * 8
             else sc -= 2
           }
@@ -878,7 +881,7 @@ function assignShifts(
           if (!dayCheckable[d]) continue
           let needMore = 0
           for (const t of WORK_SHIFTS) {
-            const deficit = minPer - cnt[t][d]
+            const deficit = minPer[t] - cnt[t][d]
             if (deficit > 0) {
               // nguồn cung riêng của ca t tại ngày d phải đủ bù
               if (remCS[t][d] < deficit) {
@@ -963,7 +966,7 @@ function assignShifts(
         const b = blocks[bi]
         let breaks = false
         for (let d = b.start; d < b.start + b.len && !breaks; d++) {
-          if (count[cur as WorkShift][d] < minPer) breaks = true
+          if (count[cur as WorkShift][d] < minPer[cur as WorkShift]) breaks = true
         }
         const c2 = costOf()
         if (!breaks && c2 < cost) {
@@ -995,7 +998,7 @@ function assignShifts(
     for (const s of allowed) {
       let score = rng() * 0.8
       for (let d = b.start; d < b.start + b.len; d++) {
-        const deficit = minPer - count[s][d]
+        const deficit = minPer[s] - count[s][d]
         if (deficit > 0) score += deficit * 12
         else score -= 3 // đã đủ người, dồn thêm là phí
       }
@@ -1138,10 +1141,18 @@ function computeFairShare(
   employees: Employee[],
   targets: number[],
   daysInMonth: number,
-  minPerShift: number,
+  need: PerShift,
 ): Record<WorkShift, number>[] {
   const share: Record<WorkShift, number>[] = employees.map(() => ({ S1: 0, S2: 0, S3: 0 }))
-  let s3Left = minPerShift * daysInMonth
+  // chia phần ca ngày (S1/S2) theo tỷ lệ số người cần ở mỗi ca
+  const daySplit = (total: number, shifts: WorkShift[]): Record<WorkShift, number> => {
+    const w = shifts.map((x) => Math.max(0, need[x]))
+    const sum = w.reduce((a, b) => a + b, 0)
+    const out: Record<WorkShift, number> = { S1: 0, S2: 0, S3: 0 }
+    shifts.forEach((x, k) => (out[x] = sum > 0 ? (total * w[k]) / sum : total / shifts.length))
+    return out
+  }
+  let s3Left = need.S3 * daysInMonth
   const s3Sharers: number[] = []
   employees.forEach((e, i) => {
     const t = targets[i]
@@ -1149,9 +1160,10 @@ function computeFairShare(
     if (e.prefer_night && !e.no_s3 && e.min_night_shifts > 0) {
       const s3 = Math.min(e.min_night_shifts, Math.max(0, t - 4))
       share[i].S3 = s3
-      const rest = (t - s3) / 2
-      share[i].S1 = e.no_s1 ? 0 : rest
-      share[i].S2 = e.no_s2 ? 0 : rest
+      const dayShifts = (['S1', 'S2'] as WorkShift[]).filter((x) => allowed.includes(x))
+      const split = daySplit(t - s3, dayShifts)
+      share[i].S1 = split.S1
+      share[i].S2 = split.S2
       s3Left -= s3
     } else if (allowed.length === 1) {
       share[i][allowed[0]] = t
@@ -1168,7 +1180,8 @@ function computeFairShare(
     const s3 = allowed.includes('S3') ? Math.min(s3Each, targets[i]) : 0
     share[i].S3 = s3
     const dayShifts = allowed.filter((x) => x !== 'S3')
-    for (const x of dayShifts) share[i][x] = (targets[i] - s3) / dayShifts.length
+    const split = daySplit(targets[i] - s3, dayShifts)
+    for (const x of dayShifts) share[i][x] = split[x]
   })
   return share
 }
@@ -1182,7 +1195,7 @@ function buildRowWithShifts(
   D: number,
   target: number,
   cntIn: Record<WorkShift, number[]>,
-  minPer: number,
+  minPer: PerShift,
   opts: { streakMin: number; streakMax: number; restMin: number; restMax: number },
   rng: Rng,
   /** nguồn cung kỳ vọng mỗi ngày từ những người CHƯA xây (worker-days / ngày) */
@@ -1197,7 +1210,9 @@ function buildRowWithShifts(
     S2: cntIn.S2.slice(),
     S3: cntIn.S3.slice(),
   }
-  const futPerShift = futureExpect / 3
+  // nguồn cung kỳ vọng chia cho từng ca theo tỷ lệ số người cần
+  const perDayNeed = Math.max(1, needPerDay(minPer))
+  const futPerShiftOf = (sh: WorkShift) => (futureExpect * minPer[sh]) / perDayNeed
   const fixedOff = new Set(e.days_off)
   const allowed = WORK_SHIFTS.filter(
     (s) => !((s === 'S1' && e.no_s1) || (s === 'S2' && e.no_s2) || (s === 'S3' && e.no_s3)),
@@ -1280,9 +1295,9 @@ function buildRowWithShifts(
         for (const sh of dom) {
           let sc = rng() * 1.5
           for (let d = s0; d < end; d++) {
-            const deficit = minPer - cnt[sh][d]
+            const deficit = minPer[sh] - cnt[sh][d]
             // urgency: thiếu hụt vượt quá nguồn cung kỳ vọng từ người xây sau = phải trám NGAY
-            if (deficit > 0) sc += 5 + Math.max(0, deficit - futPerShift) * 14
+            if (deficit > 0) sc += 5 + Math.max(0, deficit - futPerShiftOf(sh)) * 14
             else sc -= 5
           }
           if (!spec && (L === 3 || L === 4)) sc += 2
@@ -1426,7 +1441,7 @@ export function lnsRefine(
   const deficitTotal = () => {
     let s = 0
     for (const sh of WORK_SHIFTS) {
-      for (let d = 0; d < D; d++) s += Math.max(0, minPerShift - cnt[sh][d])
+      for (let d = 0; d < D; d++) s += Math.max(0, minPerShift[sh] - cnt[sh][d])
     }
     // quota ca đêm + 2 ca S1/S2 bắt buộc của người ưu tiên đêm cũng là "thiếu hụt"
     employees.forEach((e, i) => {
@@ -1490,7 +1505,7 @@ export function lnsRefine(
     return true
   }
   const tryClose = (d: number, sh: WorkShift, depth: number, visited: Set<string>): boolean => {
-    if (cnt[sh][d] >= minPerShift) return true
+    if (cnt[sh][d] >= minPerShift[sh]) return true
     for (const i of shuffled(employees.map((_, x) => x), rng)) {
       const e = employees[i]
       const row = rows[i]
@@ -1502,7 +1517,7 @@ export function lnsRefine(
         for (let dS = 0; dS < D; dS++) {
           const sS = row[dS]
           if (sS === 'OFF' || dS === d) continue
-          const isSurplus = cnt[sS as WorkShift][dS] > minPerShift
+          const isSurplus = cnt[sS as WorkShift][dS] > minPerShift[sS as WorkShift]
           if (surplusOnly !== isSurplus) continue
           const key = `${i}:${dS}`
           if (visited.has(key)) continue
@@ -1530,7 +1545,7 @@ export function lnsRefine(
     let moved = false
     for (const sh of WORK_SHIFTS) {
       for (let d = 0; d < D; d++) {
-        if (cnt[sh][d] >= minPerShift) continue
+        if (cnt[sh][d] >= minPerShift[sh]) continue
         if (tryClose(d, sh, 0, new Set())) moved = true
       }
     }
@@ -1550,7 +1565,7 @@ export function lnsRefine(
       const row = rows[i]
       for (let d = 0; d < D; d++) {
         const s = row[d]
-        if (s !== 'OFF' && cnt[s as WorkShift][d] > minPerShift) return 1
+        if (s !== 'OFF' && cnt[s as WorkShift][d] > minPerShift[s as WorkShift]) return 1
       }
       return 0
     }
@@ -1632,7 +1647,7 @@ export function fairnessLns(
     for (let d = 0; d < D; d++) if (row[d] !== 'OFF') cnt[row[d] as WorkShift][d]++
   })
   const covered = () => {
-    for (const sh of WORK_SHIFTS) for (let d = 0; d < D; d++) if (cnt[sh][d] < minPerShift) return false
+    for (const sh of WORK_SHIFTS) for (let d = 0; d < D; d++) if (cnt[sh][d] < minPerShift[sh]) return false
     return true
   }
   if (!covered()) return
@@ -1664,7 +1679,7 @@ export function fairnessLns(
       const c: Record<WorkShift, number> = { S1: 0, S2: 0, S3: 0 }
       for (const x of row) if (x !== 'OFF') c[x as WorkShift]++
       return c
-    })
+    }, minPerShift)
     return { score: f.hard * 1000 + f.soft, pairs: f.pairs, hard: f.hard }
   }
   // hàng xây lại phải giữ đúng tổng ca (cân bằng ±1) và preference người làm đêm
@@ -1775,7 +1790,7 @@ function buildAllPatterns(
   rng: Rng,
 ): boolean[][] | null {
   const { employees, daysInMonth: D, minPerShift } = input
-  const needPerDay = 3 * minPerShift
+  const perDay = needPerDay(minPerShift)
   const colCount = new Array<number>(D).fill(0)
   const patterns: (boolean[] | null)[] = employees.map(() => null)
 
@@ -1798,7 +1813,7 @@ function buildAllPatterns(
 
   for (const i of order) {
     const e = employees[i]
-    const deficit = colCount.map((c) => needPerDay - c)
+    const deficit = colCount.map((c) => perDay - c)
     const baseOpts = {
       streakMin: input.streakMin,
       streakMax: input.streakMax,
@@ -1861,7 +1876,7 @@ function buildAllPatterns(
     let worstDay = -1
     let worstDef = 0
     for (let d = 0; d < D; d++) {
-      const def = needPerDay - colCount[d]
+      const def = perDay - colCount[d]
       if (def > worstDef) {
         worstDef = def
         worstDay = d
@@ -1879,7 +1894,7 @@ function buildAllPatterns(
       if (p[worstDay] || e.days_off.includes(worstDay + 1)) continue
       // thử bật worstDay thành làm + tắt một ngày ở cột thừa, rồi kiểm tra pattern còn hợp lệ
       for (let d2 = 0; d2 < D; d2++) {
-        if (!p[d2] || colCount[d2] <= needPerDay) continue
+        if (!p[d2] || colCount[d2] <= perDay) continue
         p[worstDay] = true
         p[d2] = false
         if (patternValid(p, e, input)) {
@@ -1925,7 +1940,8 @@ function rebalanceColumns(
   needArr?: number[],
 ): void {
   const D = input.daysInMonth
-  const needOf = (d: number) => needArr?.[d] ?? 3 * input.minPerShift
+  const perDay = needPerDay(input.minPerShift)
+  const needOf = (d: number) => needArr?.[d] ?? perDay
   const deficitSum = () =>
     colCount.reduce((s, c, d) => s + Math.max(0, needOf(d) - c), 0)
   // không được phá cấu trúc block của người ưu tiên ca đêm
@@ -2121,7 +2137,8 @@ function solveMonth(input: SolverInput): SolverResult {
   // phân bổ tổng ca: đều nhau ±1, tôn trọng max cá nhân.
   // Cộng thêm chút slack (vài ca dư so với mức tối thiểu) để bài toán tô ca bớt căng cứng —
   // độ phủ là "tối thiểu N" nên thừa người một vài ca không sao.
-  const needTotal = 3 * minPerShift * D
+  const perDay = needPerDay(minPerShift)
+  const needTotal = perDay * D
   const cap = employees.map((e) => Math.min(e.max_shifts_per_month, D - e.days_off.length))
   const capSum = cap.reduce((s, c) => s + c, 0)
   const byCapDesc = employees.map((_, i) => i).sort((a, b) => cap[b] - cap[a])
@@ -2165,7 +2182,7 @@ function solveMonth(input: SolverInput): SolverResult {
 
   // rule chia đều ca cho nhóm không làm đêm — fairHard: phần vượt ngưỡng (rule chưa đạt),
   // fairSoft: tổng chênh lệch thô để tie-break
-  const fairnessOf = (matrix: ScheduleMatrix) => evaluateFairnessMatrix(employees, matrix)
+  const fairnessOf = (matrix: ScheduleMatrix) => evaluateFairnessMatrix(employees, matrix, minPerShift)
 
   const evaluate = (blocks: Block[], shiftOf: (Shift | null)[]) => {
     const matrix = emptyMatrix()
@@ -2186,7 +2203,7 @@ function solveMonth(input: SolverInput): SolverResult {
     })
     // lịch đã hợp lệ → san đều ca bằng hoán đổi đoạn lịch (giữ nguyên độ phủ & cấu trúc block)
     if (violations.length === 0 && fairnessOf(matrix).hard > 0) {
-      fairnessPolish(employees, matrix, D, { streakMin: input.streakMin, streakMax: input.streakMax, restMax: input.restMax }, rng, Date.now() + 600)
+      fairnessPolish(employees, matrix, D, { streakMin: input.streakMin, streakMax: input.streakMax, restMax: input.restMax }, rng, Date.now() + 600, minPerShift)
     }
     const fair = fairnessOf(matrix)
     return { matrix, violations, shortfall: nightShortfall(matrix), fairHard: fair.hard, fairSoft: fair.soft }
@@ -2207,7 +2224,7 @@ function solveMonth(input: SolverInput): SolverResult {
   // (hoán đổi đoạn giữ nguyên độ phủ & cấu trúc block, chỉ nhận khi chênh lệch giảm)
   const finish = (matrix: ScheduleMatrix): SolverResult => {
     const streak = { streakMin: input.streakMin, streakMax: input.streakMax, restMax: input.restMax }
-    fairnessPolish(employees, matrix, D, streak, rng, Date.now() + 1500)
+    fairnessPolish(employees, matrix, D, streak, rng, Date.now() + 1500, minPerShift)
     return { ok: true, matrix, violations: [], conflicts }
   }
 
@@ -2275,8 +2292,8 @@ function solveMonth(input: SolverInput): SolverResult {
       bestLocal.violations.length <= 4 &&
       bestLocal.violations.every((v) => v.type === 'coverage')
     ) {
-      const needArr = new Array<number>(D).fill(3 * minPerShift)
-      for (const v of bestLocal.violations) if (v.day) needArr[v.day - 1] = 3 * minPerShift + 1
+      const needArr = new Array<number>(D).fill(perDay)
+      for (const v of bestLocal.violations) if (v.day) needArr[v.day - 1] = perDay + 1
       const colCount = new Array<number>(D).fill(0)
       patterns.forEach((p) => p.forEach((w, d) => { if (w) colCount[d]++ }))
       rebalanceColumns(patterns, colCount, employees, input, rng, needArr)

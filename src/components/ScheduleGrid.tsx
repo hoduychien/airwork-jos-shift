@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { Employee, ScheduleMatrix, Shift, Violation } from '../lib/types'
-import { SHIFT_LABELS, WEEKDAY_VI, WORK_SHIFTS, weekdayOf } from '../lib/types'
+import type { Employee, PerShift, ScheduleMatrix, Shift, Violation } from '../lib/types'
+import { SHIFT_LABELS, WEEKDAY_VI, WORK_SHIFTS, perShiftLabel, weekdayOf } from '../lib/types'
 
 interface Props {
   employees: Employee[]
@@ -8,7 +8,7 @@ interface Props {
   daysInMonth: number
   month: number
   year: number
-  minPerShift: number
+  minPerShift: PerShift
   violationMap: Map<string, string[]>
   violations: Violation[]
   manual: Set<string>
@@ -233,10 +233,10 @@ export default function ScheduleGrid({
           {WORK_SHIFTS.map((s, i) => (
             <tr key={s}>
               <td className="rowhead" style={{ fontSize: 'var(--text-xs)', color: 'var(--color-ink-2)' }}>
-                Số người {s}
+                Số người {s} (≥{minPerShift[s]})
               </td>
               {days.map((d) => (
-                <td key={d} className={`sum-cell ${counts[i][d - 1] < minPerShift ? 'sum-low' : ''}`}>
+                <td key={d} className={`sum-cell ${counts[i][d - 1] < minPerShift[s] ? 'sum-low' : ''}`}>
                   {counts[i][d - 1]}
                 </td>
               ))}
@@ -245,10 +245,10 @@ export default function ScheduleGrid({
           ))}
           <tr>
             <td className="rowhead" style={{ fontSize: 'var(--text-xs)', color: 'var(--color-ink-2)' }}>
-              Kiểm tra (≥{minPerShift}/ca)
+              Kiểm tra (≥{perShiftLabel(minPerShift)}/ca)
             </td>
             {days.map((d) => {
-              const ok = WORK_SHIFTS.every((_, i) => counts[i][d - 1] >= minPerShift)
+              const ok = WORK_SHIFTS.every((s, i) => counts[i][d - 1] >= minPerShift[s])
               return (
                 <td key={d} className={`sum-cell ${ok ? 'sum-ok' : 'sum-low'}`}>
                   {ok ? 'OK' : 'LOW'}

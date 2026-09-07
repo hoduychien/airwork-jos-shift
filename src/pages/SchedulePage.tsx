@@ -15,7 +15,7 @@ import { store, type StoredSchedule } from '../lib/store'
 import { backupFilename, buildBackup, parseBackup, planRestore } from '../lib/backup'
 import { validateMatrix, violationCellMap } from '../lib/solver/validate'
 import type { Employee, ScheduleMatrix, Settings, Shift } from '../lib/types'
-import { DEFAULT_SETTINGS, WORK_SHIFTS, applyMonthData, daysInMonth, isPastMonth } from '../lib/types'
+import { DEFAULT_SETTINGS, WORK_SHIFTS, applyMonthData, daysInMonth, isPastMonth, perShiftLabel } from '../lib/types'
 import { useAuth } from '../lib/AuthContext'
 import { useFeedback } from '../components/Feedback'
 import { swappedCellTips, type SwapRequest } from '../lib/swap'
@@ -411,7 +411,7 @@ export default function SchedulePage() {
       <LoadingBar active={loading !== null || running || saving || publishing || exporting} />
       <PageHeader
         title="Lịch ca"
-        lede={`${D} ngày · 3 ca/ngày · ≥${settings.min_per_shift} người/ca · đi sớm 10' handover`}
+        lede={`${D} ngày · 3 ca/ngày · ≥${perShiftLabel(settings.min_per_shift)} người/ca · đi sớm 10' handover`}
         badge={
           <>
             {schedule && (
@@ -661,7 +661,7 @@ export default function SchedulePage() {
             const cover = WORK_SHIFTS.every((s) =>
               Array.from(
                 { length: D },
-                (_, d) => employees.filter((e) => matrix[e.id]?.[d] === s).length >= settings.min_per_shift,
+                (_, d) => employees.filter((e) => matrix[e.id]?.[d] === s).length >= settings.min_per_shift[s],
               ).every(Boolean),
             )
             const manualCount = schedule.manual.size

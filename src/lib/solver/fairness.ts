@@ -1,4 +1,4 @@
-import type { Employee, ScheduleMatrix, WorkShift } from '../types'
+import type { Employee, PerShift, ScheduleMatrix, WorkShift } from '../types'
 import { WORK_SHIFTS } from '../types'
 
 /**
@@ -7,6 +7,8 @@ import { WORK_SHIFTS } from '../types'
  *    trong cùng một nhóm, số ca mỗi loại giữa người nhiều nhất và ít nhất chênh ≤ FAIR_SPREAD.
  *  - mỗi người được làm cả S1 lẫn S2 thì |S1 − S2| ≤ FAIR_SPREAD
  *    (người không làm S3 → S1 và S2 chia đều cho họ).
+ *    Khi số người cần ở S1 ≠ S2 (need), S1/S2 được so theo TỶ LỆ need
+ *    (vd need 3/2 → 9 S1 và 6 S2 là cân).
  */
 export const FAIR_SPREAD = 2
 
@@ -60,9 +62,16 @@ export interface FairnessResult {
   pairs: [string, string][]
 }
 
+/** lệch S1 − S2 của một người, quy về thang "ca" theo tỷ lệ need S1:S2 */
+export function s1s2Diff(c: ShiftCount, need?: PerShift): number {
+  if (!need || need.S1 === need.S2 || need.S1 <= 0 || need.S2 <= 0) return Math.abs(c.S1 - c.S2)
+  return Math.abs(c.S1 * need.S2 - c.S2 * need.S1) / Math.max(need.S1, need.S2)
+}
+
 export function evaluateFairness(
   employees: Employee[],
   countOf: (e: Employee) => ShiftCount,
+  need?: PerShift,
 ): FairnessResult {
   let hard = 0
   let soft = 0
@@ -87,11 +96,13 @@ export function evaluateFairness(
     }
     if (g.allowed.includes('S1') && g.allowed.includes('S2')) {
       for (const { e, c } of counts) {
-        const diff = Math.abs(c.S1 - c.S2)
+        const diff = s1s2Diff(c, need)
         if (!g.softOnly) hard += Math.max(0, diff - FAIR_SPREAD)
         soft += diff * 0.3
         if (diff > FAIR_SPREAD && !g.softOnly) {
-          messages.push(`${e.name}: ${c.S1} ca S1 vs ${c.S2} ca S2 — lệch ${diff} (> ${FAIR_SPREAD}).`)
+          messages.push(
+            `${e.name}: ${c.S1} ca S1 vs ${c.S2} ca S2 — lệch ${Math.round(diff * 10) / 10} (> ${FAIR_SPREAD}).`,
+          )
           // ghép với người trong nhóm lệch ngược chiều nhất
           const other = counts.reduce((a, b) =>
             (b.c.S1 - b.c.S2) * (c.S1 - c.S2) < (a.c.S1 - a.c.S2) * (c.S1 - c.S2) ? b : a,
@@ -104,8 +115,12 @@ export function evaluateFairness(
   return { hard, soft, messages, pairs }
 }
 
-export function evaluateFairnessMatrix(employees: Employee[], matrix: ScheduleMatrix): FairnessResult {
-  return evaluateFairness(employees, (e) => countShifts(matrix[e.id]))
+export function evaluateFairnessMatrix(
+  employees: Employee[],
+  matrix: ScheduleMatrix,
+  need?: PerShift,
+): FairnessResult {
+  return evaluateFairness(employees, (e) => countShifts(matrix[e.id]), need)
 }
 
 /** tóm tắt khoảng số ca mỗi loại theo từng nhóm — hiển thị khi rule đạt */
@@ -144,6 +159,7 @@ export function fairnessPolish(
   streak: { streakMin: number; streakMax: number; restMax: number },
   rng: () => number = Math.random,
   deadline = Infinity,
+  need?: PerShift,
 ): number {
   const D = daysInMonth
   // người làm đêm cũng tham gia, nhưng chỉ đổi đoạn KHÔNG chứa S3 và vẫn giữ ≥2 ca S1/S2
@@ -179,7 +195,8 @@ export function fairnessPolish(
     }
     return true
   }
-  const evalNow = () => evaluateFairness(employees, (e) => counts.get(e.id) ?? countShifts(matrix[e.id]))
+  const evalNow = () =>
+    evaluateFairness(employees, (e) => counts.get(e.id) ?? countShifts(matrix[e.id]), need)
   const score = () => {
     const f = evalNow()
     return f.hard * 1000 + f.soft

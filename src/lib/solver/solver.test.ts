@@ -14,7 +14,7 @@ function makeInput(overrides: Partial<SolverInput> = {}): SolverInput {
     month: 1,
     year: 2026,
     daysInMonth: D,
-    minPerShift: 2,
+    minPerShift: { S1: 2, S2: 2, S3: 2 },
     streakMin: 2,
     streakMax: 5,
     restMin: 1,
@@ -232,5 +232,50 @@ describe('solver — chia đều ca cho nhân viên không làm đêm (rule chia
       expect(row.filter((s) => s === 'S3').length).toBe(0)
       expect(Math.abs(s1 - s2)).toBeLessThanOrEqual(3)
     }
+  })
+})
+
+describe('solver — số người khác nhau theo ca (S1=3, S2=3, S3=2)', () => {
+  const need = { S1: 3, S2: 3, S3: 2 }
+  // 9 người seed + 3 người mới, tối đa 22 ca/tháng → công suất 264 ≥ 8 × 31 = 248
+  const extra: Employee[] = ['e10', 'e11', 'e12'].map((id, i) => ({
+    id,
+    name: id,
+    code: id,
+    display_order: 10 + i,
+    prefer_night: false,
+    min_night_shifts: 0,
+    no_s1: false,
+    no_s2: false,
+    no_s3: false,
+    max_shifts_per_month: 22,
+    active: true,
+    days_off: [],
+  }))
+  const input = makeInput({
+    minPerShift: need,
+    employees: [...SEED_EMPLOYEES.map((e) => ({ ...e, days_off: [...e.days_off], max_shifts_per_month: 22 })), ...extra],
+    seed: 3,
+  })
+  const r = solveOk(input)
+
+  it('giải được lịch hợp lệ', () => {
+    expect(r.conflicts).toHaveLength(0)
+    expect(r.ok).toBe(true)
+    expect(r.violations).toHaveLength(0)
+  })
+
+  it('mỗi ngày đủ 3 người S1, 3 người S2, 2 người S3', () => {
+    for (let d = 0; d < D; d++) {
+      for (const s of WORK_SHIFTS) {
+        const n = input.employees.filter((e) => r.matrix[e.id][d] === s).length
+        expect(n).toBeGreaterThanOrEqual(need[s])
+      }
+    }
+  })
+
+  it('báo xung đột khi công suất không đủ cho mức 3/3/2 với 9 người', () => {
+    const r2 = solve(makeInput({ minPerShift: need }))
+    expect(r2.conflicts.some((c) => c.includes('3 + 3 + 2'))).toBe(true)
   })
 })

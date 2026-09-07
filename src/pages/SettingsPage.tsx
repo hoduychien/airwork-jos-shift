@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { store } from '../lib/store'
 import type { Settings } from '../lib/types'
-import { DEFAULT_SETTINGS } from '../lib/types'
+import { DEFAULT_SETTINGS, SHIFT_LABELS, WORK_SHIFTS } from '../lib/types'
 import PageHeader from '../components/PageHeader'
 import { useFeedback } from '../components/Feedback'
 import { Busy, LoadingBar, Spinner } from '../components/Loading'
@@ -63,20 +63,33 @@ export default function SettingsPage() {
               <section className="form-section">
                 <div>
                   <h3>Độ phủ</h3>
-                  <p className="hint">Số người tối thiểu trực mỗi ca, mỗi ngày.</p>
+                  <p className="hint">
+                    Số người tối thiểu trực mỗi ca, mỗi ngày — đặt riêng cho từng ca (vd S1, S2 cần 3
+                    người, S3 chỉ cần 2).
+                  </p>
                 </div>
                 <div className="form-row">
-                  <label className="field">
-                    <span className="field-label">Người / ca</span>
-                    <input
-                      type="number"
-                      className="input input-num"
-                      min={1}
-                      max={10}
-                      value={s.min_per_shift}
-                      onChange={(e) => setS({ ...s, min_per_shift: num(e.target.value) })}
-                    />
-                  </label>
+                  {WORK_SHIFTS.map((k) => (
+                    <label key={k} className="field">
+                      <span className="field-label">{SHIFT_LABELS[k]}</span>
+                      <input
+                        type="number"
+                        className="input input-num"
+                        min={1}
+                        max={10}
+                        value={s.min_per_shift[k]}
+                        onChange={(e) =>
+                          setS({
+                            ...s,
+                            min_per_shift: { ...s.min_per_shift, [k]: Math.max(1, num(e.target.value)) },
+                          })
+                        }
+                      />
+                    </label>
+                  ))}
+                  <span className="hint" style={{ alignSelf: 'end' }}>
+                    Tổng {s.min_per_shift.S1 + s.min_per_shift.S2 + s.min_per_shift.S3} người/ngày
+                  </span>
                 </div>
               </section>
 

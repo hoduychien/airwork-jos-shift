@@ -57,8 +57,33 @@ export function applyMonthData(
   return employees.map((e) => ({ ...e, ...(prefs[e.id] ?? {}), days_off: dayoffs[e.id] ?? [] }))
 }
 
+/** số người cần có ở mỗi ca (S1/S2/S3) */
+export type PerShift = Record<WorkShift, number>
+
+export const DEFAULT_PER_SHIFT: PerShift = { S1: 2, S2: 2, S3: 2 }
+
+/** tổng số người cần đi làm mỗi ngày = S1 + S2 + S3 */
+export const needPerDay = (n: PerShift): number => n.S1 + n.S2 + n.S3
+
+/** mức tối thiểu chung cho mọi ca — dùng để chuyển dữ liệu cũ (1 số) sang từng ca */
+export const perShiftOf = (v: unknown): PerShift => {
+  if (typeof v === 'number') return { S1: v, S2: v, S3: v }
+  const o = (v ?? {}) as Partial<PerShift>
+  const num = (x: unknown, dflt: number) => (typeof x === 'number' && x >= 0 ? x : dflt)
+  return {
+    S1: num(o.S1, DEFAULT_PER_SHIFT.S1),
+    S2: num(o.S2, DEFAULT_PER_SHIFT.S2),
+    S3: num(o.S3, DEFAULT_PER_SHIFT.S3),
+  }
+}
+
+/** mô tả ngắn: "3 · 3 · 2" hoặc "2" nếu 3 ca bằng nhau */
+export const perShiftLabel = (n: PerShift): string =>
+  n.S1 === n.S2 && n.S2 === n.S3 ? String(n.S1) : `${n.S1}/${n.S2}/${n.S3}`
+
 export interface Settings {
-  min_per_shift: number
+  /** số người tối thiểu mỗi ca — cài đặt cũ lưu 1 số, được chuyển qua perShiftOf khi đọc */
+  min_per_shift: PerShift
   shift_hours: { S1: string; S2: string; S3: string }
   streak_min: number
   streak_max: number
@@ -67,12 +92,23 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  min_per_shift: 2,
+  min_per_shift: { ...DEFAULT_PER_SHIFT },
   shift_hours: { S1: '6:00 – 14:00', S2: '14:00 – 22:00', S3: '22:00 – 6:00' },
   streak_min: 2,
   streak_max: 5,
   rest_min: 1,
   rest_max: 2,
+}
+
+/** chuẩn hóa settings đọc từ storage (dữ liệu cũ lưu min_per_shift là 1 số) */
+export function normalizeSettings(raw: Partial<Settings> | undefined | null): Settings {
+  const r = (raw ?? {}) as Record<string, unknown>
+  return {
+    ...DEFAULT_SETTINGS,
+    ...(raw ?? {}),
+    min_per_shift: perShiftOf(r.min_per_shift),
+    shift_hours: { ...DEFAULT_SETTINGS.shift_hours, ...((r.shift_hours as Settings['shift_hours']) ?? {}) },
+  }
 }
 
 export interface Schedule {
@@ -117,7 +153,8 @@ export interface SolverInput {
   month: number
   year: number
   daysInMonth: number
-  minPerShift: number
+  /** số người cần có ở từng ca, mỗi ngày */
+  minPerShift: PerShift
   streakMin: number
   streakMax: number
   restMin: number

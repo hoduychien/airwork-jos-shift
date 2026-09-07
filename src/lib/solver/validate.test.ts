@@ -10,7 +10,7 @@ function baseOpts(matrix: ScheduleMatrix) {
     employees: SEED_EMPLOYEES,
     matrix,
     daysInMonth: D,
-    minPerShift: 2,
+    minPerShift: { S1: 2, S2: 2, S3: 2 },
     streakMin: 2,
     streakMax: 5,
     restMax: 2,

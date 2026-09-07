@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import type { Employee, ScheduleMatrix, Settings, Violation } from '../lib/types'
+import type { Employee, PerShift, ScheduleMatrix, Settings, Violation } from '../lib/types'
 import { FAIR_SPREAD, evaluateFairnessMatrix, fairnessSummary } from '../lib/solver/fairness'
 
 /* Hallmark · component: rule-checklist · theme: Cobalt
@@ -24,6 +24,11 @@ interface Props {
   violations: Violation[]
 }
 
+function coverageLabel(n: PerShift): string {
+  if (n.S1 === n.S2 && n.S2 === n.S3) return `Độ phủ: mỗi ngày, mỗi ca có tối thiểu ${n.S1} người`
+  return `Độ phủ: mỗi ngày có tối thiểu ${n.S1} người S1, ${n.S2} người S2, ${n.S3} người S3`
+}
+
 export default function RuleChecklist({ employees, matrix, settings, violations }: Props) {
   const [open, setOpen] = useState<string | null>(null)
 
@@ -32,7 +37,7 @@ export default function RuleChecklist({ employees, matrix, settings, violations 
     return [
       {
         key: 'coverage',
-        label: `Độ phủ: mỗi ngày, mỗi ca có tối thiểu ${settings.min_per_shift} người`,
+        label: coverageLabel(settings.min_per_shift),
         types: ['coverage'],
       },
       {
@@ -83,7 +88,7 @@ export default function RuleChecklist({ employees, matrix, settings, violations 
         key: 'even-split',
         label: `Chia đều ca cho mọi nhân viên: trong cùng nhóm ràng buộc, mỗi loại ca chênh ≤ ${FAIR_SPREAD}; người làm cả S1 và S2 có |S1 − S2| ≤ ${FAIR_SPREAD} (nhóm ưu tiên đêm chỉ san đều mềm vì quota khác nhau)`,
         types: [],
-        checkFails: () => evaluateFairnessMatrix(employees, matrix).messages,
+        checkFails: () => evaluateFairnessMatrix(employees, matrix, settings.min_per_shift).messages,
         extra: () => fairnessSummary(employees, matrix),
       },
       {

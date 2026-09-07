@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs'
-import type { Employee, ScheduleMatrix, Shift } from './types'
+import type { Employee, PerShift, ScheduleMatrix, Shift } from './types'
 import { WEEKDAY_VI, WORK_SHIFTS, daysInMonth, weekdayOf } from './types'
 
 const FILL: Record<Shift, string> = {
@@ -10,12 +10,12 @@ const FILL: Record<Shift, string> = {
 }
 const WEEKEND_FILL = 'FFFFF2CC'
 
-function summaryRows(employees: Employee[], matrix: ScheduleMatrix, D: number, minPer: number) {
+function summaryRows(employees: Employee[], matrix: ScheduleMatrix, D: number, minPer: PerShift) {
   const counts = WORK_SHIFTS.map((s) =>
     Array.from({ length: D }, (_, d) => employees.filter((e) => matrix[e.id]?.[d] === s).length),
   )
   const check = Array.from({ length: D }, (_, d) =>
-    WORK_SHIFTS.every((_, i) => counts[i][d] >= minPer) ? 'OK' : 'LOW',
+    WORK_SHIFTS.every((s, i) => counts[i][d] >= minPer[s]) ? 'OK' : 'LOW',
   )
   return { counts, check }
 }
@@ -25,7 +25,7 @@ export async function exportXlsx(
   matrix: ScheduleMatrix,
   month: number,
   year: number,
-  minPer: number,
+  minPer: PerShift,
 ): Promise<void> {
   const D = daysInMonth(month, year)
   const wb = new ExcelJS.Workbook()
@@ -110,7 +110,7 @@ export function exportCsv(
   matrix: ScheduleMatrix,
   month: number,
   year: number,
-  minPer: number,
+  minPer: PerShift,
 ): void {
   const D = daysInMonth(month, year)
   const lines: string[] = []

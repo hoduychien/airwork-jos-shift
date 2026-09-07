@@ -1,7 +1,7 @@
 import { supabase, isLocalMode } from './supabase'
 import { SEED_EMPLOYEES, SEED_SCHEDULE_10_2026, decodeScheduleRow } from './seed'
 import type { Employee, EmployeePrefs, ScheduleMatrix, Settings, Shift } from './types'
-import { DEFAULT_SETTINGS, daysInMonth } from './types'
+import { daysInMonth, normalizeSettings } from './types'
 import { mergeDaysOff, type LeaveRequest, type LeaveStatus } from './leave'
 import { applySwap, describeCell, overallStatus, type Decision, type Notification, type SwapRequest } from './swap'
 import { listAccounts } from './auth'
@@ -146,7 +146,7 @@ class LocalStore implements Store {
   }
   async getSettings() {
     // merge default để settings cũ trong localStorage không thiếu field mới
-    return { ...DEFAULT_SETTINGS, ...lsGet<Partial<Settings>>(LS.settings, {}) }
+    return normalizeSettings(lsGet<Partial<Settings>>(LS.settings, {}))
   }
   async saveSettings(s: Settings) {
     lsSet(LS.settings, s)
@@ -407,7 +407,7 @@ class SupabaseStore implements Store {
     const { data, error } = await this.sb.from('settings').select('key, value')
     if (error) throw error
     const map = Object.fromEntries((data ?? []).map((r: { key: string; value: unknown }) => [r.key, r.value]))
-    return { ...DEFAULT_SETTINGS, ...(map['app'] as Partial<Settings> | undefined) }
+    return normalizeSettings(map['app'] as Partial<Settings> | undefined)
   }
   async saveSettings(s: Settings) {
     const { error } = await this.sb.from('settings').upsert({ key: 'app', value: s }, { onConflict: 'key' })
