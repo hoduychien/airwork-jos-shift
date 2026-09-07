@@ -30,8 +30,8 @@ interface Props {
   nextPreview?: { month: number; year: number; matrix: ScheduleMatrix | null }
 }
 
-/** tối đa số ngày tháng sau hiện thêm (lấp hết khoảng trống, không quá 1 tháng) */
-const PREVIEW_MAX = 31
+/** tối đa số ngày tháng sau hiện thêm — chỉ vài ngày đầu để thấy ca nối tiếp */
+const PREVIEW_MAX = 5
 
 interface MenuState {
   employeeId: string
