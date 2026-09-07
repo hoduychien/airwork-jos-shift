@@ -3,6 +3,7 @@ import { store } from '../lib/store'
 import type { Settings } from '../lib/types'
 import { DEFAULT_SETTINGS, SHIFT_LABELS, WORK_SHIFTS } from '../lib/types'
 import PageHeader from '../components/PageHeader'
+import Stepper from '../components/Stepper'
 import { useFeedback } from '../components/Feedback'
 import { Busy, LoadingBar, Spinner } from '../components/Loading'
 
@@ -72,18 +73,12 @@ export default function SettingsPage() {
                   {WORK_SHIFTS.map((k) => (
                     <label key={k} className="field">
                       <span className="field-label">{SHIFT_LABELS[k]}</span>
-                      <input
-                        type="number"
-                        className="input input-num"
+                      <Stepper
+                        value={s.min_per_shift[k]}
                         min={1}
                         max={10}
-                        value={s.min_per_shift[k]}
-                        onChange={(e) =>
-                          setS({
-                            ...s,
-                            min_per_shift: { ...s.min_per_shift, [k]: Math.max(1, num(e.target.value)) },
-                          })
-                        }
+                        aria-label={`Số người ${k}`}
+                        onChange={(v) => setS({ ...s, min_per_shift: { ...s.min_per_shift, [k]: v } })}
                       />
                     </label>
                   ))}

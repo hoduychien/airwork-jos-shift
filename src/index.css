@@ -648,3 +648,42 @@ input[type='number'] {
     transition-duration: 1ms !important;
   }
 }
+
+/* ---------- stepper (số chỉ tăng/giảm bằng nút) ---------- */
+.stepper {
+  display: inline-flex;
+  align-items: stretch;
+  height: 2.5em;
+  border: var(--rule-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--color-paper);
+}
+.stepper-btn {
+  width: 2.25em;
+  border: 0;
+  background: var(--color-accent-soft);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+.stepper-btn:hover:not(:disabled) {
+  background: oklch(0% 0 0 / 0.14);
+}
+.stepper-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.stepper-value {
+  min-width: 2.5em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-sm);
+  border-left: var(--rule);
+  border-right: var(--rule);
+}
