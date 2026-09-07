@@ -34,6 +34,14 @@ export default function SchedulePage() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS)
   const [swaps, setSwaps] = useState<SwapRequest[]>([])
   const [schedule, setSchedule] = useState<StoredSchedule | null>(null)
+  // lịch tháng sau — chỉ để xem trước vài ngày đầu ở mép phải bảng (lấp khoảng trống trên màn rộng)
+  const [nextMatrix, setNextMatrix] = useState<ScheduleMatrix | null>(null)
+  const nextMonth = month === 12 ? 1 : month + 1
+  const nextYear = month === 12 ? year + 1 : year
+  const nextPreview = useMemo(
+    () => ({ month: nextMonth, year: nextYear, matrix: nextMatrix }),
+    [nextMonth, nextYear, nextMatrix],
+  )
   const [conflicts, setConflicts] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -79,13 +87,14 @@ export default function SchedulePage() {
     async (mode: 'hard' | 'soft' = 'hard') => {
       setLoading(mode)
       try {
-        const [emps, sets, dayoffs, prefs, sched, swapList] = await Promise.all([
+        const [emps, sets, dayoffs, prefs, sched, swapList, nextSched] = await Promise.all([
           store.listEmployees(),
           store.getSettings(),
           store.getDayOffs(month, year),
           store.getMonthPrefs(month, year),
           store.getSchedule(month, year),
           store.listSwapRequests(month, year).catch(() => [] as SwapRequest[]),
+          store.getSchedule(nextMonth, nextYear).catch(() => null),
         ])
         // ràng buộc ca (ưu tiên đêm, cấm ca, tối đa) là thiết lập THEO THÁNG
         // chỉ người có làm trong tháng này (theo ngày vào/nghỉ việc) mới có dòng trên lịch
@@ -96,12 +105,13 @@ export default function SchedulePage() {
         setSwaps(swapList)
         // thành viên chỉ xem lịch đã chốt; bản nháp chỉ admin thấy
         setSchedule(sched && (isAdmin || sched.status === 'published') ? sched : null)
+        setNextMatrix(nextSched && (isAdmin || nextSched.status === 'published') ? nextSched.matrix : null)
         setConflicts([])
       } finally {
         setLoading(null)
       }
     },
-    [month, year, isAdmin],
+    [month, year, nextMonth, nextYear, isAdmin],
   )
 
   useEffect(() => {
@@ -729,6 +739,7 @@ export default function SchedulePage() {
             readOnly={!canEdit}
             locked={isPast}
             swapTips={swapTips}
+            nextPreview={nextPreview}
             visibleEmployees={visibleEmployees}
             shiftFilter={shiftFilter}
           />

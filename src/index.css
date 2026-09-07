@@ -365,6 +365,34 @@ input[type='number'] {
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
+/* xem trước tháng sau: cột mờ, gạch chéo nhạt, không nhận chuột; vạch đậm ngăn với tháng này */
+.sched th.preview,
+.sched td.preview {
+  background-color: var(--color-paper-2);
+  background-image: repeating-linear-gradient(-45deg, transparent 0 5px, oklch(0% 0 0 / 0.035) 5px 6px);
+  pointer-events: none;
+  user-select: none;
+}
+.sched thead th.preview {
+  color: var(--color-ink-3);
+  font-weight: 500;
+}
+.sched thead th.preview.weekend {
+  background-color: var(--weekend-head);
+}
+.sched th[data-preview='1'],
+.sched td.preview[data-first] {
+  border-left: 2px solid var(--color-line-strong);
+}
+.cell-preview {
+  display: block;
+  opacity: 0.45;
+  filter: saturate(0.5);
+  cursor: default;
+}
+.sched td.preview.sum-cell {
+  color: var(--color-ink-3);
+}
 .cell[data-shift='S1'] {
   background: var(--shift-s1);
   color: var(--shift-s1-ink);

@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Employee, PerShift, ScheduleMatrix, Shift, Violation } from '../lib/types'
-import { SHIFT_LABELS, WEEKDAY_VI, WORK_SHIFTS, perShiftLabel, weekdayOf } from '../lib/types'
+import { SHIFT_LABELS, WEEKDAY_VI, WORK_SHIFTS, daysInMonth, perShiftLabel, weekdayOf } from '../lib/types'
 
 interface Props {
   employees: Employee[]
@@ -23,7 +23,15 @@ interface Props {
   shiftFilter?: Shift | null
   /** ô đã đổi ca (key `${employeeId}:${day}`) → dòng mô tả hiện trong tooltip */
   swapTips?: Map<string, string>
+  /**
+   * Xem trước tháng sau: khi bảng hẹp hơn khung (màn rộng), lấp khoảng trống bên phải
+   * bằng vài ngày đầu tháng sau — chỉ xem, không thao tác. `matrix` null = chưa có lịch.
+   */
+  nextPreview?: { month: number; year: number; matrix: ScheduleMatrix | null }
 }
+
+/** tối đa số ngày tháng sau hiện thêm (lấp hết khoảng trống, không quá 1 tháng) */
+const PREVIEW_MAX = 31
 
 interface MenuState {
   employeeId: string
@@ -57,8 +65,39 @@ export default function ScheduleGrid({
   visibleEmployees,
   shiftFilter = null,
   swapTips,
+  nextPreview,
 }: Props) {
   const rows = visibleEmployees ?? employees
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const tableRef = useRef<HTMLTableElement>(null)
+  // số ngày tháng sau vừa khít khoảng trống — đo lại khi khung đổi cỡ
+  const [previewDays, setPreviewDays] = useState(0)
+  const nextD = nextPreview ? daysInMonth(nextPreview.month, nextPreview.year) : 0
+  useLayoutEffect(() => {
+    const wrap = wrapRef.current
+    const table = tableRef.current
+    if (!wrap || !table || !nextPreview) return
+    const measure = () => {
+      const col = table.querySelector<HTMLElement>('thead th[data-day]')
+      const colW = col ? col.getBoundingClientRect().width : 0
+      if (colW === 0) return
+      const shown = table.querySelectorAll('thead th[data-preview]').length
+      const baseW = table.getBoundingClientRect().width - shown * colW
+      const free = wrap.clientWidth - baseW
+      // trừ vạch ngăn 2px + chút dư để không sinh thanh cuộn ngang
+      const fit = Math.max(0, Math.min(PREVIEW_MAX, nextD, Math.floor((free - 6) / colW)))
+      setPreviewDays((cur) => (cur === fit ? cur : fit))
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(wrap)
+    return () => ro.disconnect()
+  }, [nextPreview, nextD, D, rows.length])
+  const preview = nextPreview && previewDays > 0 ? nextPreview : null
+  const pDays = preview ? Array.from({ length: previewDays }, (_, i) => i + 1) : []
+  const pCounts = WORK_SHIFTS.map((s) =>
+    pDays.map((d) => employees.filter((e) => preview?.matrix?.[e.id]?.[d - 1] === s).length),
+  )
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [tip, setTip] = useState<{ x: number; y: number; msgs: string[]; title?: string } | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -116,16 +155,16 @@ export default function ScheduleGrid({
   const menuShift: Shift = menu ? (matrix[menu.employeeId]?.[menu.day - 1] ?? 'OFF') : 'OFF'
 
   return (
-    <div className="grid-wrap" data-locked={locked || undefined} data-readonly={readOnly || undefined}>
+    <div ref={wrapRef} className="grid-wrap" data-locked={locked || undefined} data-readonly={readOnly || undefined}>
       {locked && <div className="grid-locked-tag">Tháng đã qua · chỉ xem</div>}
-      <table className="sched">
+      <table ref={tableRef} className="sched">
         <thead>
           <tr>
             <th className="rowhead">Nhân viên</th>
             {days.map((d) => {
               const wd = weekdayOf(d, month, year)
               return (
-                <th key={d} className={wd === 0 || wd === 6 ? 'weekend' : ''}>
+                <th key={d} data-day={d} className={wd === 0 || wd === 6 ? 'weekend' : ''}>
                   <div style={{ fontSize: '0.6rem', fontWeight: 500, color: 'var(--color-ink-3)' }}>
                     {WEEKDAY_VI[wd]}
                   </div>
@@ -133,6 +172,23 @@ export default function ScheduleGrid({
                 </th>
               )
             })}
+            {preview &&
+              pDays.map((d) => {
+                const wd = weekdayOf(d, preview.month, preview.year)
+                return (
+                  <th
+                    key={'p' + d}
+                    data-preview={d}
+                    className={'preview ' + (wd === 0 || wd === 6 ? 'weekend' : '')}
+                    title={d + '/' + preview.month + '/' + preview.year + ' — tháng sau, chỉ xem'}
+                  >
+                    <div style={{ fontSize: '0.6rem', fontWeight: 500, color: 'var(--color-ink-3)' }}>
+                      {d === 1 ? 'T' + preview.month : WEEKDAY_VI[wd]}
+                    </div>
+                    {d}
+                  </th>
+                )
+              })}
             <th>S1</th>
             <th>S2</th>
             <th>S3</th>
@@ -143,7 +199,7 @@ export default function ScheduleGrid({
         <tbody>
           {rows.length === 0 && (
             <tr>
-              <td className="rowhead" colSpan={D + 6} style={{ color: 'var(--color-ink-3)', fontWeight: 500 }}>
+              <td className="rowhead" colSpan={D + pDays.length + 6} style={{ color: 'var(--color-ink-3)', fontWeight: 500 }}>
                 Không có nhân viên nào khớp bộ lọc.
               </td>
             </tr>
@@ -218,6 +274,17 @@ export default function ScheduleGrid({
                     </td>
                   )
                 })}
+                {preview &&
+                  pDays.map((d) => {
+                    const shift = preview.matrix?.[e.id]?.[d - 1]
+                    return (
+                      <td key={'p' + d} className="preview" data-first={d === 1 || undefined}>
+                        <span className="cell cell-preview" data-shift={shift ?? 'OFF'} aria-hidden>
+                          {!shift || shift === 'OFF' ? '·' : shift}
+                        </span>
+                      </td>
+                    )
+                  })}
                 <td className="sum-cell">{t.s1}</td>
                 <td className="sum-cell">{t.s2}</td>
                 <td className="sum-cell">{t.s3}</td>
@@ -240,6 +307,11 @@ export default function ScheduleGrid({
                   {counts[i][d - 1]}
                 </td>
               ))}
+              {pDays.map((d) => (
+                <td key={'p' + d} className="sum-cell preview">
+                  {preview?.matrix ? pCounts[i][d - 1] : ''}
+                </td>
+              ))}
               <td colSpan={5} />
             </tr>
           ))}
@@ -255,6 +327,9 @@ export default function ScheduleGrid({
                 </td>
               )
             })}
+            {pDays.map((d) => (
+              <td key={'p' + d} className="sum-cell preview" />
+            ))}
             <td colSpan={5} />
           </tr>
         </tfoot>
