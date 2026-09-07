@@ -652,17 +652,17 @@ input[type='number'] {
 /* ---------- stepper: ô số dùng chung (gõ tay + 2 nút − / +) ---------- */
 .stepper {
   --stepper-h: 2.5em;
+  --stepper-btn: 2.1em;
   display: inline-flex;
-  align-items: center;
+  align-items: stretch;
+  width: max-content;
+  align-self: flex-start; /* không giãn theo .field (flex column) */
   height: var(--stepper-h);
-  padding: 0 0.25em;
-  gap: 0.15em;
   background: var(--color-surface);
   border: 1px solid var(--color-line-strong);
   border-radius: var(--radius-sm);
-  transition:
-    border-color var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-fast) var(--ease-out);
+  overflow: hidden;
+  transition: border-color var(--dur-fast) var(--ease-out);
 }
 .stepper:hover {
   border-color: var(--color-ink-3);
@@ -675,30 +675,34 @@ input[type='number'] {
   border-color: var(--color-line);
   color: var(--color-ink-3);
 }
+/* nút chiếm trọn ngăn — vùng hover = vùng bấm */
 .stepper-btn {
+  flex: 0 0 var(--stepper-btn);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: calc(var(--stepper-h) - 0.7em);
-  height: calc(var(--stepper-h) - 0.7em);
+  width: var(--stepper-btn);
   border: 0;
-  border-radius: calc(var(--radius-sm) - 2px);
-  background: transparent;
+  background: var(--color-paper);
   color: var(--color-ink-2);
   cursor: pointer;
   transition:
     background-color var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out),
-    transform var(--dur-fast) var(--ease-out);
+    color var(--dur-fast) var(--ease-out);
+}
+.stepper-btn:first-child {
+  border-right: 1px solid var(--color-line);
+}
+.stepper-btn:last-child {
+  border-left: 1px solid var(--color-line);
 }
 .stepper-btn:hover:not(:disabled) {
-  background: var(--color-accent-soft);
+  background: var(--color-paper-3);
   color: var(--color-ink);
 }
 .stepper-btn:active:not(:disabled) {
   background: var(--color-signal-soft);
   color: var(--color-accent);
-  transform: scale(0.92);
 }
 .stepper-btn:disabled {
   color: var(--color-line-strong);
@@ -706,10 +710,17 @@ input[type='number'] {
 }
 .stepper-btn:focus-visible {
   outline: 2px solid var(--color-focus);
-  outline-offset: 1px;
+  outline-offset: -2px;
+}
+/* ngăn giữa: số + hậu tố */
+.stepper-mid {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  padding: 0 0.55em;
 }
 .stepper-value {
-  width: 2.6em;
+  width: 1.6em;
   min-width: 0;
   border: 0;
   background: transparent;
@@ -724,23 +735,29 @@ input[type='number'] {
 .stepper-value:focus {
   outline: none;
 }
+.stepper-value::selection {
+  background: var(--color-signal-soft);
+}
 .stepper-value:disabled {
   color: var(--color-ink-3);
 }
 .stepper-suffix {
-  margin-left: -0.15em;
-  padding-right: 0.3em;
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   color: var(--color-ink-3);
   white-space: nowrap;
   user-select: none;
+  pointer-events: none;
 }
 .stepper-sm {
   --stepper-h: 1.9em;
+  --stepper-btn: 1.8em;
   vertical-align: middle;
+  margin: 0 0.35em;
+}
+.stepper-sm .stepper-mid {
+  padding: 0 0.4em;
 }
 .stepper-sm .stepper-value {
-  width: 2.2em;
   font-size: var(--text-xs);
 }

@@ -63,9 +63,11 @@ export default function Stepper({
           <path d="M2.5 6h7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
         </svg>
       </button>
+      <span className="stepper-mid">
       <input
         id={id}
         className="stepper-value"
+        size={3}
         type="text"
         inputMode="numeric"
         pattern="[0-9]*"
@@ -95,6 +97,7 @@ export default function Stepper({
         }}
       />
       {suffix && <span className="stepper-suffix">{suffix}</span>}
+      </span>
       <button
         type="button"
         className="stepper-btn"
