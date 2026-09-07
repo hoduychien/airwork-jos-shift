@@ -8,6 +8,7 @@ import { DEFAULT_PASSWORD, ROLES, ROLE_LABELS, authMode, canEditAccount, type Ro
 import { useAuth } from '../lib/AuthContext'
 import { useFeedback } from '../components/Feedback'
 import Stepper from '../components/Stepper'
+import DateField from '../components/DateField'
 import type { Employee } from '../lib/types'
 import { applyMonthData, daysInMonth, employeesInMonth, hasLeft, isoDate, prefsOf } from '../lib/types'
 
@@ -800,22 +801,21 @@ function EmployeeForm({
             <div className="grid grid-cols-2 gap-3" style={{ maxWidth: '24rem' }}>
               <label className="field">
                 <span className="field-label">Ngày vào làm</span>
-                <input
-                  type="date"
-                  className="input"
-                  value={e.joined_at ?? ''}
-                  onChange={(ev) => set({ joined_at: ev.target.value || null })}
+                <DateField
+                  value={e.joined_at}
+                  max={e.left_at}
+                  aria-label="Ngày vào làm"
+                  onChange={(v) => set({ joined_at: v })}
                 />
                 <span className="auth-note">Trống = có mặt ở mọi tháng. Tháng trước ngày này sẽ không có dòng của người này.</span>
               </label>
               <label className="field">
                 <span className="field-label">Ngày nghỉ việc</span>
-                <input
-                  type="date"
-                  className="input"
-                  value={e.left_at ?? ''}
-                  min={e.joined_at ?? undefined}
-                  onChange={(ev) => set({ left_at: ev.target.value || null, active: !ev.target.value })}
+                <DateField
+                  value={e.left_at}
+                  min={e.joined_at}
+                  aria-label="Ngày nghỉ việc"
+                  onChange={(v) => set({ left_at: v, active: !v })}
                 />
                 <span className="auth-note">Trống = còn làm. Lịch từ tháng sau ngày này sẽ không còn người này.</span>
               </label>

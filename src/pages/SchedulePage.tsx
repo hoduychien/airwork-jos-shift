@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import DateRangePicker from '@wojtekmaj/react-daterange-picker'
 import '@wojtekmaj/react-daterange-picker/dist/DateRangePicker.css'
+import { CalendarIcon, calendarProps } from '../components/DateField'
 import 'react-calendar/dist/Calendar.css'
 import AppSelect from '../components/AppSelect'
 import RuleChecklist from '../components/RuleChecklist'
@@ -879,7 +880,7 @@ function RangeDialog({
           </span>
         </div>
         <h2 style={{ fontSize: 'var(--text-md)' }}>Chọn khoảng ngày cần xếp lại</h2>
-        <div className="field" ref={pickerRef} onClick={() => setOpen(true)}>
+        <div className="field app-date" ref={pickerRef} onClick={() => setOpen(true)}>
           <span className="field-label">Khoảng ngày</span>
           <DateRangePicker
             isOpen={open}
@@ -900,12 +901,7 @@ function RangeDialog({
             calendarIcon={<CalendarIcon />}
             rangeDivider=" → "
             calendarAriaLabel="Mở lịch"
-            calendarProps={{
-              prevLabel: <Chevron dir="left" />,
-              nextLabel: <Chevron dir="right" />,
-              prev2Label: null,
-              next2Label: null,
-            }}
+            calendarProps={calendarProps}
           />
         </div>
         <p className="confirm-msg" style={{ margin: 0 }}>
@@ -927,43 +923,5 @@ function RangeDialog({
         </div>
       </div>
     </div>
-  )
-}
-
-/* icon nét mảnh 1.6px — cùng ngôn ngữ với các icon khác của app, thay icon mặc định (nét dày) của picker */
-function CalendarIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <rect x="3" y="4.5" width="18" height="16" rx="2.5" />
-      <path d="M3 9.5h18M8 2.5v4M16 2.5v4" />
-    </svg>
-  )
-}
-
-function Chevron({ dir }: { dir: 'left' | 'right' }) {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d={dir === 'left' ? 'm15 18-6-6 6-6' : 'm9 18 6-6-6-6'} />
-    </svg>
   )
 }

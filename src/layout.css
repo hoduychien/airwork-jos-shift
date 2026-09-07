@@ -536,15 +536,17 @@ button.notif-item:last-child {
   gap: var(--space-xs);
 }
 
-/* ---------- popup chọn khoảng ngày cần xếp (react-daterange-picker) — style theo token của app ---------- */
+/* ---------- chọn ngày / khoảng ngày (react-date-picker & react-daterange-picker) — style theo token của app, scope .app-date ---------- */
 .range-modal {
   max-width: 28rem;
   overflow: visible;
 }
-.range-modal .react-daterange-picker {
+.app-date .react-daterange-picker,
+.app-date .react-date-picker {
   width: 100%;
 }
-.range-modal .react-daterange-picker__wrapper {
+.app-date .react-daterange-picker__wrapper,
+.app-date .react-date-picker__wrapper {
   background: var(--color-surface);
   border: 1px solid var(--color-line-strong);
   border-radius: var(--radius-sm);
@@ -554,47 +556,60 @@ button.notif-item:last-child {
   color: var(--color-ink);
   transition: border-color var(--dur-fast) var(--ease-out);
 }
-.range-modal .react-daterange-picker--open .react-daterange-picker__wrapper,
-.range-modal .react-daterange-picker__wrapper:focus-within {
+.app-date .react-daterange-picker--open .react-daterange-picker__wrapper,
+.app-date .react-date-picker--open .react-date-picker__wrapper,
+.app-date .react-daterange-picker__wrapper:focus-within,
+.app-date .react-date-picker__wrapper:focus-within {
   border-color: var(--color-accent);
 }
-.range-modal .react-daterange-picker__inputGroup {
+.app-date .react-daterange-picker__inputGroup,
+.app-date .react-date-picker__inputGroup {
   cursor: pointer;
 }
-.range-modal .react-daterange-picker__inputGroup__input {
+.app-date .react-daterange-picker__inputGroup__input,
+.app-date .react-date-picker__inputGroup__input {
   color: var(--color-ink);
   font-family: inherit;
   pointer-events: none; /* chỉ chọn trên lịch, không gõ tay */
   caret-color: transparent;
 }
 /* focus chỉ báo bằng viền wrapper (accent), không vẽ outline lên từng ô dd/mm/yyyy hay nút lịch */
-.range-modal .react-daterange-picker__inputGroup__input:focus-visible,
-.range-modal .react-daterange-picker__button:focus-visible,
-.range-modal .react-daterange-picker__wrapper:focus-visible {
+.app-date .react-daterange-picker__inputGroup__input:focus-visible,
+.app-date .react-date-picker__inputGroup__input:focus-visible,
+.app-date .react-daterange-picker__button:focus-visible,
+.app-date .react-date-picker__button:focus-visible,
+.app-date .react-daterange-picker__wrapper:focus-visible,
+.app-date .react-date-picker__wrapper:focus-visible {
   outline: none;
 }
-.range-modal .react-daterange-picker__inputGroup__input:invalid {
+.app-date .react-daterange-picker__inputGroup__input:invalid,
+.app-date .react-date-picker__inputGroup__input:invalid {
   background: transparent;
 }
-.range-modal .react-daterange-picker__range-divider {
+.app-date .react-daterange-picker__range-divider,
+.app-date .react-date-picker__range-divider {
   color: var(--color-ink-3);
   padding: 0 0.3rem;
 }
-.range-modal .react-daterange-picker__button {
+.app-date .react-daterange-picker__button,
+.app-date .react-date-picker__button {
   display: inline-flex;
   align-items: center;
   padding: 0 0.15rem 0 0.35rem;
   color: var(--color-ink-3);
   transition: color var(--dur-fast) var(--ease-out);
 }
-.range-modal .react-daterange-picker__button:enabled:hover,
-.range-modal .react-daterange-picker__button:enabled:focus {
+.app-date .react-daterange-picker__button:enabled:hover,
+.app-date .react-date-picker__button:enabled:hover,
+.app-date .react-daterange-picker__button:enabled:focus,
+.app-date .react-date-picker__button:enabled:focus {
   color: var(--color-accent);
 }
-.range-modal .react-daterange-picker__calendar {
+.app-date .react-daterange-picker__calendar,
+.app-date .react-date-picker__calendar {
   z-index: 50;
 }
-.range-modal .react-calendar {
+.app-date .react-calendar {
   width: 100%;
   border: 1px solid var(--color-line-strong);
   border-radius: var(--radius-md);
@@ -604,7 +619,7 @@ button.notif-item:last-child {
   box-shadow: 0 8px 24px oklch(0% 0 0 / 0.12);
   overflow: hidden;
 }
-.range-modal .react-calendar__navigation button {
+.app-date .react-calendar__navigation button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -614,68 +629,95 @@ button.notif-item:last-child {
   letter-spacing: 0.04em;
   color: var(--color-ink-2);
 }
-.range-modal .react-calendar__navigation__arrow {
+.app-date .react-calendar__navigation__arrow {
   min-width: 2.25rem;
   color: var(--color-ink-3);
 }
-.range-modal .react-calendar__navigation__arrow:enabled:hover {
+.app-date .react-calendar__navigation__arrow:enabled:hover {
   color: var(--color-accent);
 }
-.range-modal .react-calendar__month-view__weekdays {
+.app-date .react-calendar__month-view__weekdays {
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   color: var(--color-ink-3);
 }
-.range-modal .react-calendar__month-view__weekdays abbr {
+.app-date .react-calendar__month-view__weekdays abbr {
   text-decoration: none;
 }
-.range-modal .react-calendar__tile {
+.app-date .react-calendar__tile {
   font-family: var(--font-mono);
 }
-.range-modal .react-calendar__tile:enabled:hover,
-.range-modal .react-calendar__tile:enabled:focus {
+.app-date .react-calendar__tile:enabled:hover,
+.app-date .react-calendar__tile:enabled:focus {
   background: var(--color-paper-2);
 }
-.range-modal .react-calendar__tile--now {
+.app-date .react-calendar__tile--now {
   background: var(--color-signal-soft);
 }
 /* khoảng đã chọn: cam nhạt cho các ngày giữa, cam đậm cho ngày đầu & ngày cuối */
-.range-modal .react-calendar__tile--active,
-.range-modal .react-calendar__tile--active:enabled:hover,
-.range-modal .react-calendar__tile--active:enabled:focus,
-.range-modal .react-calendar--selectRange .react-calendar__tile--hover,
-.range-modal .react-calendar--selectRange .react-calendar__tile--hover:enabled:hover {
+.app-date .react-calendar__tile--active,
+.app-date .react-calendar__tile--active:enabled:hover,
+.app-date .react-calendar__tile--active:enabled:focus,
+.app-date .react-calendar--selectRange .react-calendar__tile--hover,
+.app-date .react-calendar--selectRange .react-calendar__tile--hover:enabled:hover {
   background: var(--color-tint-orange);
   color: var(--color-ink);
   border-radius: 0;
 }
-.range-modal .react-calendar__tile--rangeStart,
-.range-modal .react-calendar__tile--rangeStart:enabled:hover,
-.range-modal .react-calendar__tile--rangeStart:enabled:focus,
-.range-modal .react-calendar__tile--rangeEnd,
-.range-modal .react-calendar__tile--rangeEnd:enabled:hover,
-.range-modal .react-calendar__tile--rangeEnd:enabled:focus,
-.range-modal .react-calendar__tile--hoverStart,
-.range-modal .react-calendar__tile--hoverEnd {
+.app-date .react-calendar__tile--rangeStart,
+.app-date .react-calendar__tile--rangeStart:enabled:hover,
+.app-date .react-calendar__tile--rangeStart:enabled:focus,
+.app-date .react-calendar__tile--rangeEnd,
+.app-date .react-calendar__tile--rangeEnd:enabled:hover,
+.app-date .react-calendar__tile--rangeEnd:enabled:focus,
+.app-date .react-calendar__tile--hoverStart,
+.app-date .react-calendar__tile--hoverEnd {
   background: var(--color-orange);
   color: var(--color-accent-ink);
   font-weight: 600;
 }
-.range-modal .react-calendar__tile--rangeStart,
-.range-modal .react-calendar__tile--hoverStart {
+.app-date .react-calendar__tile--rangeStart,
+.app-date .react-calendar__tile--hoverStart {
   border-radius: var(--radius-sm) 0 0 var(--radius-sm);
 }
-.range-modal .react-calendar__tile--rangeEnd,
-.range-modal .react-calendar__tile--hoverEnd {
+.app-date .react-calendar__tile--rangeEnd,
+.app-date .react-calendar__tile--hoverEnd {
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
-.range-modal .react-calendar__tile--rangeBothEnds,
-.range-modal .react-calendar__tile--hoverBothEnds {
+.app-date .react-calendar__tile--rangeBothEnds,
+.app-date .react-calendar__tile--hoverBothEnds {
   border-radius: var(--radius-sm);
 }
-.range-modal .react-calendar__tile:disabled {
+.app-date .react-calendar__tile:disabled {
   color: var(--color-line-strong);
   background: transparent;
+}
+
+/* ô chọn 1 ngày (DateField): nút xoá + placeholder mờ */
+.app-date .react-date-picker {
+  width: 100%;
+}
+.app-date .react-date-picker__wrapper {
+  min-height: 2.5em;
+}
+.app-date .react-date-picker__inputGroup__input::placeholder,
+.app-date .react-date-picker__inputGroup__leadingZero {
+  color: var(--color-ink-3);
+}
+.app-date .react-date-picker__calendar {
+  z-index: 60;
+}
+.app-date .react-calendar {
+  max-width: 20rem;
+}
+.app-date .react-calendar__tile--active,
+.app-date .react-calendar__tile--active:enabled:hover,
+.app-date .react-calendar__tile--active:enabled:focus {
+  border-radius: var(--radius-sm);
+}
+.app-date[data-disabled] .react-date-picker__wrapper {
+  background: var(--color-paper-2);
+  color: var(--color-ink-3);
 }
 
 /* ---------- stat strip — dải số liệu thật, chia ô bằng hairline ---------- */
