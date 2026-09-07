@@ -1,5 +1,16 @@
 import Select from 'react-select'
 
+/** menu vừa mở → cuộn option đang chọn vào giữa danh sách (menu render trong body nên tìm theo class) */
+function scrollSelectedIntoView() {
+  requestAnimationFrame(() => {
+    const list = document.querySelector<HTMLElement>('.app-select__menu-list')
+    const sel = list?.querySelector<HTMLElement>('.app-select__option--is-selected')
+    if (!list || !sel) return
+    const top = sel.offsetTop - (list.clientHeight - sel.offsetHeight) / 2
+    list.scrollTop = Math.max(0, top)
+  })
+}
+
 /* Hallmark · component: select · theme: Cobalt — react-select style qua token,
  * states: default · hover · focus · active · disabled đủ theo styles API */
 
@@ -38,6 +49,8 @@ export default function AppSelect<T extends string | number>({
       }}
       isDisabled={disabled}
       isSearchable={false}
+      classNamePrefix="app-select"
+      onMenuOpen={scrollSelectedIntoView}
       // menu render trong body để không bị bảng lịch (overflow) cắt mất
       menuPortalTarget={document.body}
       styles={{
