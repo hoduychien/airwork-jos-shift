@@ -1755,12 +1755,6 @@ button.notif-item:last-child {
   font-size: var(--text-2xs);
   color: var(--color-ink-3);
 }
-.settings-pop-input {
-  width: 8.5rem;
-  padding: 0.3rem 0.5rem;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-}
 .settings-pop-note {
   margin: 0;
   padding: var(--space-xs) var(--space-md) var(--space-sm);

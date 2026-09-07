@@ -111,25 +111,6 @@ export default function SettingsPopover({ onDone }: { onDone: () => void }) {
           </div>
         </section>
 
-        <section className="settings-pop-group">
-          <div className="settings-pop-title">
-            <h4>Giờ các ca</h4>
-            <span className="settings-pop-sum">chỉ để hiển thị</span>
-          </div>
-          {WORK_SHIFTS.map((k) => (
-            <div key={k} className="settings-pop-row">
-              <span className="settings-pop-label">{k}</span>
-              <input
-                className="input settings-pop-input"
-                disabled={loading}
-                value={s.shift_hours[k]}
-                aria-label={`Giờ ${k}`}
-                onChange={(e) => patch({ shift_hours: { ...s.shift_hours, [k]: e.target.value } })}
-              />
-            </div>
-          ))}
-        </section>
-
         <p className="settings-pop-note">
           Quy tắc cứng luôn giữ: 2 ngày làm liền cùng ca, nghỉ ≥ 16h, không chuyển S2→S1, S3→S2, S3→S1 liền kề.
         </p>
