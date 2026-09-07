@@ -1703,3 +1703,74 @@ button.notif-item:last-child {
 .account-note {
   color: var(--color-ink-3);
 }
+
+/* ---------- popover cài đặt chia ca ---------- */
+.settings-pop {
+  padding: var(--space-2xs) 0;
+  max-height: min(70vh, 32rem);
+}
+.settings-pop-group {
+  padding: var(--space-xs) var(--space-md);
+  border-bottom: var(--rule);
+}
+.settings-pop-group:last-of-type {
+  border-bottom: 0;
+}
+.settings-pop-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-2xs);
+}
+.settings-pop-title h4 {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.settings-pop-sum {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--color-ink-3);
+  white-space: nowrap;
+}
+.settings-pop-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  min-height: 2.1rem;
+}
+.settings-pop-row .stepper-sm {
+  margin: 0;
+}
+.settings-pop-label {
+  display: block;
+  font-size: var(--text-sm);
+  color: var(--color-ink);
+}
+.settings-pop-hint {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--color-ink-3);
+}
+.settings-pop-input {
+  width: 8.5rem;
+  padding: 0.3rem 0.5rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+.settings-pop-note {
+  margin: 0;
+  padding: var(--space-xs) var(--space-md) var(--space-sm);
+  font-size: var(--text-2xs);
+  line-height: 1.5;
+  color: var(--color-ink-3);
+}
+.settings-pop-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-xs);
+  text-align: right;
+}

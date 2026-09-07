@@ -17,7 +17,6 @@ const NAV: { to: string; label: string; icon: IconName; adminOnly?: boolean; pen
   { to: '/doi-ca', label: 'Đổi ca', icon: 'swap' },
   { to: '/ban-giao', label: 'Bàn giao', icon: 'handover', pending: true },
   { to: '/nhan-vien', label: 'Nhân viên', icon: 'users', adminOnly: true },
-  { to: '/cai-dat', label: 'Cài đặt', icon: 'settings', adminOnly: true },
 ]
 
 const DESKTOP = '(min-width: 768px)'

@@ -6,12 +6,13 @@ import { useNotifications } from '../lib/NotificationsContext'
 import { useFeedback } from './Feedback'
 import { fmtShort } from '../lib/swap'
 import type { Notification } from '../lib/swap'
+import SettingsPopover from './SettingsPopover'
 
 /* Hallmark · component: topbar — thanh trên cùng cho toàn app, dính khi cuộn.
  * Trái: wordmark (chỉ mobile, vì sidebar đã có ở desktop). Phải: chuông thông báo + tài khoản, cả hai mở popover.
  * Popover: đóng khi bấm ra ngoài / Esc; mỗi lúc chỉ mở một cái. */
 
-type Open = 'bell' | 'account' | null
+type Open = 'bell' | 'settings' | 'account' | null
 
 /** popover neo dưới nút, canh phải; đóng khi bấm ngoài / Esc (xử lý ở Topbar) */
 function Popover({ label, children, wide }: { label: string; children: ReactNode; wide?: boolean }) {
@@ -27,6 +28,14 @@ function BellIcon() {
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z" />
       <path d="M10 20.5a2 2 0 0 0 4 0M12 3v2" />
+    </svg>
+  )
+}
+function GearIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" />
     </svg>
   )
 }
@@ -149,6 +158,28 @@ export default forwardRef<HTMLElement>(function Topbar(_props, ref) {
             </Popover>
           )}
         </div>
+
+        {/* ---- cài đặt chia ca (admin) ---- */}
+        {isAdmin && (
+          <div className="popover-anchor">
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label="Cài đặt chia ca"
+              aria-haspopup="dialog"
+              aria-expanded={open === 'settings'}
+              data-active={open === 'settings' || undefined}
+              onClick={() => toggle('settings')}
+            >
+              <GearIcon />
+            </button>
+            {open === 'settings' && (
+              <Popover label="Cài đặt chia ca" wide>
+                <SettingsPopover onDone={() => setOpen(null)} />
+              </Popover>
+            )}
+          </div>
+        )}
 
         {/* ---- tài khoản ---- */}
         <div className="popover-anchor">

@@ -130,7 +130,7 @@ src/
     store.ts        data layer: SupabaseStore / LocalStore cùng interface
     export.ts       xuất .xlsx (ExcelJS, giữ màu) và .csv
     types.ts        kiểu dữ liệu + hằng số ca
-  pages/            SchedulePage, EmployeesPage, SettingsPage, LoginPage
+  pages/            SchedulePage, EmployeesPage, LoginPage (cài đặt chia ca là popover ở thanh trên)
 supabase/
   migrations/001_init.sql   schema + RLS + realtime publication
   seed.sql                  dữ liệu mẫu

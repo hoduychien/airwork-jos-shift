@@ -4,7 +4,6 @@ import { AuthProvider, useAuth } from './lib/AuthContext'
 import Layout from './components/Layout'
 import SchedulePage from './pages/SchedulePage'
 import EmployeesPage from './pages/EmployeesPage'
-import SettingsPage from './pages/SettingsPage'
 import LoginPage from './pages/LoginPage'
 import ChangePasswordPage from './pages/ChangePasswordPage'
 import AccountPage from './pages/AccountPage'
@@ -43,14 +42,8 @@ function Shell() {
             </AdminOnly>
           }
         />
-        <Route
-          path="/cai-dat"
-          element={
-            <AdminOnly>
-              <SettingsPage />
-            </AdminOnly>
-          }
-        />
+        {/* cài đặt giờ là popover ở thanh trên — link cũ về bảng lịch */}
+        <Route path="/cai-dat" element={<Navigate to="/" replace />} />
         <Route path="/xin-nghi" element={<RequestOffPage />} />
         <Route path="/doi-ca" element={<ShiftSwapPage />} />
         {/* màn hình chờ ra mắt — chỉ xem, chưa thao tác được */}
