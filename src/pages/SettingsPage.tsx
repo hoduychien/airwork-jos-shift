@@ -30,8 +30,6 @@ export default function SettingsPage() {
     }
   }
 
-  const num = (v: string) => Math.max(0, Number(v) || 0)
-
   return (
     <div className="page">
       <LoadingBar active={loading || saving} />
@@ -77,6 +75,7 @@ export default function SettingsPage() {
                         value={s.min_per_shift[k]}
                         min={1}
                         max={10}
+                        suffix="người"
                         aria-label={`Số người ${k}`}
                         onChange={(v) => setS({ ...s, min_per_shift: { ...s.min_per_shift, [k]: v } })}
                       />
@@ -124,24 +123,24 @@ export default function SettingsPage() {
                 <div className="form-row">
                   <label className="field">
                     <span className="field-label">Tối thiểu (ngày)</span>
-                    <input
-                      type="number"
-                      className="input input-num"
+                    <Stepper
+                      value={s.streak_min}
                       min={1}
                       max={7}
-                      value={s.streak_min}
-                      onChange={(e) => setS({ ...s, streak_min: num(e.target.value) })}
+                      suffix="ngày"
+                      aria-label="Chuỗi làm tối thiểu"
+                      onChange={(v) => setS({ ...s, streak_min: v })}
                     />
                   </label>
                   <label className="field">
                     <span className="field-label">Tối đa (ngày)</span>
-                    <input
-                      type="number"
-                      className="input input-num"
+                    <Stepper
+                      value={s.streak_max}
                       min={2}
                       max={10}
-                      value={s.streak_max}
-                      onChange={(e) => setS({ ...s, streak_max: num(e.target.value) })}
+                      suffix="ngày"
+                      aria-label="Chuỗi làm tối đa"
+                      onChange={(v) => setS({ ...s, streak_max: v })}
                     />
                   </label>
                 </div>
@@ -155,24 +154,24 @@ export default function SettingsPage() {
                 <div className="form-row">
                   <label className="field">
                     <span className="field-label">Tối thiểu (ngày)</span>
-                    <input
-                      type="number"
-                      className="input input-num"
+                    <Stepper
+                      value={s.rest_min}
                       min={1}
                       max={4}
-                      value={s.rest_min}
-                      onChange={(e) => setS({ ...s, rest_min: num(e.target.value) })}
+                      suffix="ngày"
+                      aria-label="Nghỉ tối thiểu"
+                      onChange={(v) => setS({ ...s, rest_min: v })}
                     />
                   </label>
                   <label className="field">
                     <span className="field-label">Tối đa (ngày)</span>
-                    <input
-                      type="number"
-                      className="input input-num"
+                    <Stepper
+                      value={s.rest_max}
                       min={1}
                       max={5}
-                      value={s.rest_max}
-                      onChange={(e) => setS({ ...s, rest_max: num(e.target.value) })}
+                      suffix="ngày"
+                      aria-label="Nghỉ tối đa"
+                      onChange={(v) => setS({ ...s, rest_max: v })}
                     />
                   </label>
                 </div>

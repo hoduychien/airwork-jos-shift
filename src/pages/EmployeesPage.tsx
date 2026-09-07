@@ -7,6 +7,7 @@ import { ACCOUNT_EMAIL_DOMAIN, accountsApi, type AccountInfo } from '../lib/acco
 import { DEFAULT_PASSWORD, ROLES, ROLE_LABELS, authMode, canEditAccount, type Role } from '../lib/auth'
 import { useAuth } from '../lib/AuthContext'
 import { useFeedback } from '../components/Feedback'
+import Stepper from '../components/Stepper'
 import type { Employee } from '../lib/types'
 import { applyMonthData, daysInMonth, prefsOf } from '../lib/types'
 
@@ -790,15 +791,13 @@ function EmployeeForm({
                   }
                 />
                 Ưu tiên ca đêm (S3) — tối thiểu
-                <input
-                  type="number"
-                  className="input input-num"
-                  style={{ width: '3.5rem' }}
+                <Stepper
+                  size="sm"
                   min={0}
                   max={26}
                   disabled={!e.prefer_night}
                   value={e.min_night_shifts}
-                  onChange={(ev) => set({ min_night_shifts: Number(ev.target.value) })}
+                  onChange={(v) => set({ min_night_shifts: v })}
                   aria-label="Số ca đêm tối thiểu mỗi tháng"
                 />
                 ca đêm/tháng (vẫn có 2-3 ca S1, S2)
@@ -826,13 +825,13 @@ function EmployeeForm({
           {!isPm && (
             <label className="field" style={{ maxWidth: '14rem' }}>
               <span className="field-label">Số ca tối đa/tháng</span>
-              <input
-                type="number"
-                className="input input-num"
+              <Stepper
                 min={0}
                 max={31}
+                suffix="ca"
                 value={e.max_shifts_per_month}
-                onChange={(ev) => set({ max_shifts_per_month: Number(ev.target.value) })}
+                onChange={(v) => set({ max_shifts_per_month: v })}
+                aria-label="Số ca tối đa mỗi tháng"
               />
             </label>
           )}
