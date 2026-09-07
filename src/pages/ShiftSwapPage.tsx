@@ -13,6 +13,7 @@ import {
   WEEKDAY_VI,
   daysInMonth,
   employeesInMonth,
+  prevTailOf,
   weekdayOf,
   type Employee,
   type Settings,
@@ -73,6 +74,7 @@ export default function ShiftSwapPage() {
   const [employees, setEmployees] = useState<Employee[]>([])
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS)
   const [schedule, setSchedule] = useState<StoredSchedule | null>(null)
+  const [prevTail, setPrevTail] = useState<Record<string, Shift[]> | undefined>(undefined)
   const [requests, setRequests] = useState<SwapRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
@@ -86,12 +88,14 @@ export default function ShiftSwapPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [emps, sets, sched, reqs] = await Promise.all([
+      const [emps, sets, sched, reqs, prevSched] = await Promise.all([
         store.listEmployees(),
         store.getSettings(),
         store.getSchedule(MONTH, YEAR),
         store.listSwapRequests(MONTH, YEAR),
+        store.getSchedule(MONTH === 1 ? 12 : MONTH - 1, MONTH === 1 ? YEAR - 1 : YEAR).catch(() => null),
       ])
+      setPrevTail(prevSched ? prevTailOf(prevSched.matrix) : undefined)
       setEmployees(employeesInMonth(emps, MONTH, YEAR))
       setSettings(sets)
       setSchedule(sched && sched.status === 'published' ? sched : null)
@@ -167,12 +171,13 @@ export default function ShiftSwapPage() {
       streakMax: settings.streak_max,
       restMax: settings.rest_max,
       skipBalance: true,
+      prevTail,
     }
     const before = new Set(validateMatrix({ ...opts, matrix }).map((v) => v.message))
     return validateMatrix({ ...opts, matrix: applySwap(matrix, draft) })
       .map((v) => v.message)
       .filter((m, i, arr) => !before.has(m) && arr.indexOf(m) === i)
-  }, [myId, schedule, formError, myShift, partnerShift, myDay, partnerId, partnerDay, employees, D, settings, matrix])
+  }, [myId, schedule, formError, myShift, partnerShift, myDay, partnerId, partnerDay, employees, D, settings, matrix, prevTail])
 
   const submit = async () => {
     if (!myId || !myShift || !partnerShift || formError) return

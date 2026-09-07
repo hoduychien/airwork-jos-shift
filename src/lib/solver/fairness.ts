@@ -174,7 +174,10 @@ export function fairnessPolish(
   // chuỗi nghỉ giữa tháng (không chạm biên, không chứa ngày nghỉ đăng ký) không quá restMax
   const streaksOk = (row: readonly string[], e: Employee): boolean => {
     const off = offSet.get(e.id)!
-    let run = 0
+    // nối tháng trước: ngày 1 phải nghỉ hoặc cùng ca với ngày cuối tháng trước; chuỗi cộng dồn ≤ streakMax
+    const carry = e.carry_in
+    if (carry && row[0] !== 'OFF' && row[0] !== carry.shift) return false
+    let run = carry && row[0] === carry.shift ? carry.run : 0
     let rest = 0
     let restHasRequested = false
     for (let d = 0; d <= D; d++) {

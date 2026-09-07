@@ -21,7 +21,32 @@ export interface Employee {
   left_at: string | null
   /** ngày nghỉ cố định đăng ký cho tháng đang xem (1-based) */
   days_off: number[]
+  /** chỉ solver dùng: trạng thái cuối tháng trước (đang làm ca nào, đã liền mấy ngày) */
+  carry_in?: CarryIn | null
 }
+
+/** Chuỗi làm đang dở từ tháng trước: ngày cuối tháng trước làm ca `shift`, đã liền `run` ngày. */
+export interface CarryIn {
+  shift: WorkShift
+  run: number
+}
+
+/** Suy ra carry-in từ các ngày cuối tháng trước (mảng theo thứ tự thời gian). Nghỉ ngày cuối → null. */
+export function carryOf(tail: readonly Shift[] | undefined | null): CarryIn | null {
+  if (!tail || tail.length === 0) return null
+  const last = tail[tail.length - 1]
+  if (!last || last === 'OFF') return null
+  let run = 0
+  for (let i = tail.length - 1; i >= 0 && tail[i] === last; i--) run++
+  return { shift: last, run }
+}
+
+/** Số ngày cuối tháng trước cần giữ để nối ràng buộc (chuỗi tối đa + 1 là đủ). */
+export const PREV_TAIL_DAYS = 7
+
+/** Cắt vài ngày cuối của lịch tháng trước cho từng người (đầu vào prevTail của solver/validator). */
+export const prevTailOf = (matrix: ScheduleMatrix): Record<string, Shift[]> =>
+  Object.fromEntries(Object.entries(matrix).map(([id, row]) => [id, row.slice(-PREV_TAIL_DAYS)]))
 
 /** YYYY-MM-DD của ngày `day` trong tháng */
 export const isoDate = (year: number, month: number, day: number): string =>
@@ -195,6 +220,11 @@ export interface SolverInput {
   range?: { from: number; to: number }
   /** lịch hiện có — dùng để giữ các ngày ngoài `range` */
   base?: ScheduleMatrix
+  /**
+   * Vài ngày cuối THÁNG TRƯỚC của từng người (theo thứ tự thời gian) — để ca ngày 1
+   * nối đúng với ngày cuối tháng trước: không đổi ca sát nhau, không kéo chuỗi quá dài.
+   */
+  prevTail?: Record<string, Shift[]>
 }
 
 export interface SolverResult {

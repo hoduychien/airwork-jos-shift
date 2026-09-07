@@ -7,7 +7,7 @@ import type {
   SolverResult,
   WorkShift,
 } from '../types'
-import { WORK_SHIFTS, needPerDay } from '../types'
+import { WORK_SHIFTS, carryOf, needPerDay } from '../types'
 import { evaluateFairness, evaluateFairnessMatrix, fairnessPolish, isNightEmployee, allowedShiftsOf } from './fairness'
 import { validateMatrix } from './validate'
 
@@ -150,11 +150,14 @@ function buildPattern(
     restMax: number
     /** ép đúng dãy độ dài block (dùng cho người ưu tiên ca đêm) */
     fixedLens?: number[]
+    /** số ngày đã làm liền ở cuối tháng trước (0 = ngày cuối tháng trước nghỉ) */
+    carryRun?: number
   },
   rng: Rng,
   preferSmallTailBlocks: boolean,
 ): boolean[] | null {
   const { streakMin, streakMax, restMin, restMax } = opts
+  const carryRun = opts.carryRun ?? 0
   let best: boolean[] | null = null
   let bestScore = -Infinity
   let nodes = 0
@@ -182,7 +185,8 @@ function buildPattern(
     }
 
     // liệt kê các lựa chọn (gap nghỉ g, block làm L)
-    const gMin = p === 0 ? 0 : restMin
+    // đang dở chuỗi từ tháng trước mà đã đủ streakMax → ngày 1 bắt buộc nghỉ
+    const gMin = p === 0 ? (carryRun >= streakMax ? restMin : 0) : restMin
     const gCap = Math.min(D - p, restMax + 10)
     const choices: { g: number; L: number; score: number }[] = []
 
@@ -195,10 +199,13 @@ function buildPattern(
       }
       const s = p + g // ngày bắt đầu block
       if (s >= D) break
-      const maxL = Math.min(streakMax, D - s, rem)
+      // block nối tiếp chuỗi tháng trước (bắt đầu ngày 0): chỉ được kéo thêm streakMax − carryRun ngày
+      const cont = s === 0 && carryRun > 0
+      const maxL = Math.min(cont ? streakMax - carryRun : streakMax, D - s, rem)
       const forcedL = opts.fixedLens?.[blkIdx]
       for (let L = 1; L <= maxL; L++) {
-        if (forcedL !== undefined && L !== Math.min(forcedL, maxL)) continue
+        // block nối tiếp không tính vào dãy block ép sẵn
+        if (!cont && forcedL !== undefined && L !== Math.min(forcedL, maxL)) continue
         const end = s + L
         // block không được chứa ngày nghỉ cố định
         let blocked = false
@@ -209,8 +216,8 @@ function buildPattern(
           }
         }
         if (blocked) break // kéo dài thêm cũng dính, dừng
-        // block ngắn hơn streakMin chỉ được phép khi chạm cuối tháng
-        if (L < streakMin && end < D) continue
+        // block ngắn hơn streakMin chỉ được phép khi chạm cuối tháng (hoặc nối đủ với tháng trước)
+        if (L < streakMin && end < D && !(cont && carryRun + L >= streakMin)) continue
         // prune: phần target còn lại phải nhét vừa số ngày còn lại của tháng
         const remLeft = rem - L
         if (remLeft > 0) {
@@ -259,7 +266,7 @@ function buildPattern(
       const { g, L } = choices[i]
       const s = p + g
       for (let d = s; d < s + L; d++) pattern[d] = true
-      dfs(s + L, rem - L, pattern, blkIdx + 1)
+      dfs(s + L, rem - L, pattern, s === 0 && carryRun > 0 ? blkIdx : blkIdx + 1)
       for (let d = s; d < s + L; d++) pattern[d] = false
       if (bestScore >= -0.001 && best && countWork(best) === target) {
         // đã có nghiệm đạt target với điểm dương — vẫn thử thêm 1 nhánh cho đa dạng
@@ -332,6 +339,14 @@ function assignShifts(
     WORK_SHIFTS.filter(
       (s) => !((s === 'S1' && e.no_s1) || (s === 'S2' && e.no_s2) || (s === 'S3' && e.no_s3)),
     )
+  // block bắt đầu ngày 0 của người đang dở chuỗi từ tháng trước: bắt buộc cùng ca với ngày cuối tháng trước
+  const allowedFor = (bi: number): WorkShift[] => {
+    const b = blocks[bi]
+    const e = employees[b.empIdx]
+    const a = allowedOf(e)
+    if (b.start === 0 && e.carry_in) return a.filter((x) => x === e.carry_in!.shift)
+    return a
+  }
   const empIndex = new Map(employees.map((e, i) => [e.id, i]))
   const blocksOfEmp: number[][] = employees.map(() => [])
   blocks.forEach((b, i) => blocksOfEmp[b.empIdx].push(i))
@@ -464,9 +479,7 @@ function assignShifts(
     const si = shiftOf[bi]
     const sj = shiftOf[bj]
     if (!si || !sj || si === sj || si === 'OFF' || sj === 'OFF') return null
-    const ei = employees[blocks[bi].empIdx]
-    const ej = employees[blocks[bj].empIdx]
-    if (!allowedOf(ei).includes(sj as WorkShift) || !allowedOf(ej).includes(si as WorkShift)) return null
+    if (!allowedFor(bi).includes(sj as WorkShift) || !allowedFor(bj).includes(si as WorkShift)) return null
     apply(bi, si as WorkShift, -1)
     apply(bj, sj as WorkShift, -1)
     apply(bi, sj as WorkShift, 1)
@@ -498,9 +511,8 @@ function assignShifts(
       for (let bi = 0; bi < blocks.length; bi++) {
         const si = shiftOf[bi]
         if (!si || si === 'OFF') continue
-        const ei = employees[blocks[bi].empIdx]
         // flip đơn
-        for (const s of allowedOf(ei)) {
+        for (const s of allowedFor(bi)) {
           if (s === si) continue
           apply(bi, si as WorkShift, -1)
           apply(bi, s, 1)
@@ -520,8 +532,7 @@ function assignShifts(
         for (let bj = bi + 1; bj < blocks.length; bj++) {
           const sj = shiftOf[bj]
           if (!sj || sj === 'OFF' || sj === siNow) continue
-          const ej = employees[blocks[bj].empIdx]
-          if (!allowedOf(ei).includes(sj as WorkShift) || !allowedOf(ej).includes(siNow as WorkShift)) continue
+          if (!allowedFor(bi).includes(sj as WorkShift) || !allowedFor(bj).includes(siNow as WorkShift)) continue
           apply(bi, siNow as WorkShift, -1)
           apply(bj, sj as WorkShift, -1)
           apply(bi, sj as WorkShift, 1)
@@ -579,7 +590,7 @@ function assignShifts(
       if (day < b.start || day >= b.start + b.len) continue
       const sOld = shiftOf[bi]
       if (sOld === null || sOld === sNeed || sOld === 'OFF') continue
-      if (!allowedOf(employees[b.empIdx]).includes(sNeed)) continue
+      if (!allowedFor(bi).includes(sNeed)) continue
       const violBefore = prefViol(b.empIdx)
       const snap = snapshot()
       apply(bi, sOld as WorkShift, -1)
@@ -703,7 +714,7 @@ function assignShifts(
         const bi = Math.floor(rng() * blocks.length)
         const cur = shiftOf[bi]
         if (cur === null || cur === 'OFF') continue
-        for (const s of shuffled(allowedOf(employees[blocks[bi].empIdx]), rng)) {
+        for (const s of shuffled(allowedFor(bi), rng)) {
           if (s === cur) continue
           apply(bi, cur as WorkShift, -1)
           apply(bi, s, 1)
@@ -724,9 +735,7 @@ function assignShifts(
         const si = shiftOf[bi]
         const sj = shiftOf[bj]
         if (bi === bj || si === null || sj === null || si === sj || si === 'OFF' || sj === 'OFF') continue
-        const ei = employees[blocks[bi].empIdx]
-        const ej = employees[blocks[bj].empIdx]
-        if (!allowedOf(ei).includes(sj as WorkShift) || !allowedOf(ej).includes(si as WorkShift)) continue
+        if (!allowedFor(bi).includes(sj as WorkShift) || !allowedFor(bj).includes(si as WorkShift)) continue
         apply(bi, si as WorkShift, -1)
         apply(bj, sj as WorkShift, -1)
         apply(bi, sj as WorkShift, 1)
@@ -769,7 +778,7 @@ function assignShifts(
     // domain tĩnh của từng block (xấp xỉ, bỏ qua ràng buộc cặp designated động)
     const staticDom: WorkShift[][] = blocks.map((b, bi) => {
       const e = employees[b.empIdx]
-      const allowed = allowedOf(e)
+      const allowed = allowedFor(bi)
       if (e.prefer_night && !e.no_s3 && e.min_night_shifts > 0) {
         if (designatedNonNight.has(bi)) return (['S1', 'S2'] as WorkShift[]).filter((s) => allowed.includes(s))
         return relaxed ? allowed : allowed.includes('S3') ? ['S3'] : []
@@ -803,7 +812,7 @@ function assignShifts(
 
     const domainOf = (bi: number): WorkShift[] => {
       const e = employees[blocks[bi].empIdx]
-      const allowed = allowedOf(e)
+      const allowed = allowedFor(bi)
       if (e.prefer_night && !e.no_s3 && e.min_night_shifts > 0) {
         if (designatedNonNight.has(bi)) {
           // cặp block chỉ định: mỗi loại một block
@@ -957,8 +966,7 @@ function assignShifts(
       const bi = Math.floor(rng() * blocks.length)
       const cur = shiftOf[bi]
       if (cur === null || cur === 'OFF') continue
-      const emp = employees[blocks[bi].empIdx]
-      for (const s of shuffled(allowedOf(emp), rng)) {
+      for (const s of shuffled(allowedFor(bi), rng)) {
         if (s === cur) continue
         apply(bi, cur as WorkShift, -1)
         apply(bi, s, 1)
@@ -990,7 +998,7 @@ function assignShifts(
   for (const bi of order) {
     const b = blocks[bi]
     const emp = employees[b.empIdx]
-    const allowed = allowedOf(emp)
+    const allowed = allowedFor(bi)
     if (allowed.length === 0) continue
 
     let bestS: WorkShift = allowed[0]
@@ -1054,8 +1062,7 @@ function assignShifts(
       const bi = Math.floor(rng() * blocks.length)
       const cur = shiftOf[bi]
       if (cur === null || cur === 'OFF') continue
-      const emp = employees[blocks[bi].empIdx]
-      const allowed = allowedOf(emp)
+      const allowed = allowedFor(bi)
       for (const s of shuffled(allowed, rng)) {
         if (s === cur) continue
         apply(bi, cur as WorkShift, -1)
@@ -1078,9 +1085,7 @@ function assignShifts(
       const si = shiftOf[bi]
       const sj = shiftOf[bj]
       if (bi !== bj && si !== null && sj !== null && si !== sj && si !== 'OFF' && sj !== 'OFF') {
-        const ei = employees[blocks[bi].empIdx]
-        const ej = employees[blocks[bj].empIdx]
-        if (allowedOf(ei).includes(sj as WorkShift) && allowedOf(ej).includes(si as WorkShift)) {
+        if (allowedFor(bi).includes(sj as WorkShift) && allowedFor(bj).includes(si as WorkShift)) {
           apply(bi, si as WorkShift, -1)
           apply(bj, sj as WorkShift, -1)
           apply(bi, sj as WorkShift, 1)
@@ -1105,8 +1110,7 @@ function assignShifts(
       // lắc nhẹ: đổi ngẫu nhiên 1 block để thoát cực trị địa phương
       const bj = Math.floor(rng() * blocks.length)
       const cj = shiftOf[bj]
-      const empJ = employees[blocks[bj].empIdx]
-      const allowedJ = allowedOf(empJ)
+      const allowedJ = allowedFor(bj)
       if (cj !== null && allowedJ.length > 1) {
         const alt = allowedJ[Math.floor(rng() * allowedJ.length)]
         if (alt !== cj) {
@@ -1190,18 +1194,20 @@ function computeFairShare(
  * Nhờ biết cnt[s][d] toàn cục, người xây sau tự động trám đúng các ô (ngày, ca) còn thiếu —
  * tránh hẳn bài toán "tô màu pattern cố định" vốn hay vô nghiệm khi công suất sát nút.
  */
-function buildRowWithShifts(
+export function buildRowWithShifts(
   e: Employee,
   D: number,
   target: number,
   cntIn: Record<WorkShift, number[]>,
   minPer: PerShift,
-  opts: { streakMin: number; streakMax: number; restMin: number; restMax: number },
+  opts: { streakMin: number; streakMax: number; restMin: number; restMax: number; forceCont?: boolean },
   rng: Rng,
   /** nguồn cung kỳ vọng mỗi ngày từ những người CHƯA xây (worker-days / ngày) */
   futureExpect: number,
   /** phần chia công bằng mỗi loại ca cho người này (từ computeFairShare) */
   fairShare?: Record<WorkShift, number>,
+  /** nguồn cung kỳ vọng RIÊNG cho ngày 1 theo ca (người chưa xây bị khoá ca bởi chuỗi dở tháng trước) */
+  future0?: Record<WorkShift, number>,
 ): Shift[] | null {
   const { streakMin, streakMax, restMin, restMax } = opts
   // làm việc trên bản sao — caller tự cộng dồn row trả về vào cnt thật
@@ -1212,13 +1218,15 @@ function buildRowWithShifts(
   }
   // nguồn cung kỳ vọng chia cho từng ca theo tỷ lệ số người cần
   const perDayNeed = Math.max(1, needPerDay(minPer))
-  const futPerShiftOf = (sh: WorkShift) => (futureExpect * minPer[sh]) / perDayNeed
+  const futPerShiftOf = (sh: WorkShift, d = -1) =>
+    d === 0 && future0 ? future0[sh] : (futureExpect * minPer[sh]) / perDayNeed
   const fixedOff = new Set(e.days_off)
   const allowed = WORK_SHIFTS.filter(
     (s) => !((s === 'S1' && e.no_s1) || (s === 'S2' && e.no_s2) || (s === 'S3' && e.no_s3)),
   )
   if (allowed.length === 0) return null
   const isOffDay = (d0: number) => fixedOff.has(d0 + 1)
+  const carry = e.carry_in ?? null
 
   // người ưu tiên ca đêm: dãy block cố định [block-S3 ~4 ngày..., 2 block nhỏ S1/S2]
   const needsQuota = e.prefer_night && !e.no_s3 && e.min_night_shifts > 0
@@ -1255,9 +1263,11 @@ function buildRowWithShifts(
       record(rem, score)
       return rem === 0
     }
-    const gMin = p === 0 ? 0 : restMin
-    const gCap = Math.min(D - p, restMax + 10)
-    const choices: { g: number; L: number; sh: WorkShift; sc: number; small: boolean }[] = []
+    // đang dở chuỗi từ tháng trước: đủ streakMax rồi thì ngày 1 phải nghỉ
+    const gMin = p === 0 ? (carry && carry.run >= streakMax ? restMin : 0) : restMin
+    // ép nối ca ngày 1 (bước vá chỗ nối): tại p = 0 chỉ xét g = 0
+    const gCap = p === 0 && opts.forceCont && carry && carry.run < streakMax ? 0 : Math.min(D - p, restMax + 10)
+    const choices: { g: number; L: number; sh: WorkShift; sc: number; small: boolean; cont: boolean }[] = []
     for (let g = gMin; g <= gCap; g++) {
       if (g > restMax && p !== 0) {
         let hasFixed = false
@@ -1266,15 +1276,17 @@ function buildRowWithShifts(
       }
       const s0 = p + g
       if (s0 >= D) break
-      const spec = lenSpecs?.[blkIdx]
-      const maxL = Math.min(streakMax, D - s0, rem)
+      // block nối tiếp chuỗi tháng trước: cùng ca, tổng chuỗi ≤ streakMax, không tính vào dãy block ép sẵn
+      const cont = s0 === 0 && carry !== null
+      const spec = cont ? undefined : lenSpecs?.[blkIdx]
+      const maxL = Math.min(cont ? streakMax - carry!.run : streakMax, D - s0, rem)
       for (let L = 1; L <= maxL; L++) {
         if (spec && L !== Math.min(spec.len, maxL)) continue
         const end = s0 + L
         let blocked = false
         for (let d = s0; d < end; d++) if (isOffDay(d)) { blocked = true; break }
         if (blocked) break
-        if (L < streakMin && end < D) continue
+        if (L < streakMin && end < D && !(cont && carry!.run + L >= streakMin)) continue
         const remAfter = rem - L
         if (!spec && remAfter > 0 && remAfter < streakMin) continue
         // prune: phần target còn lại phải nhét vừa số ngày còn lại của tháng
@@ -1285,7 +1297,9 @@ function buildRowWithShifts(
         }
         // domain ca cho block này
         let dom: WorkShift[]
-        if (spec) {
+        if (cont) {
+          dom = allowed.includes(carry!.shift) ? [carry!.shift] : []
+        } else if (spec) {
           dom = spec.small
             ? (['S1', 'S2'] as WorkShift[]).filter((x) => allowed.includes(x) && !usedSmall.has(x))
             : allowed.includes('S3') ? ['S3'] : []
@@ -1297,7 +1311,7 @@ function buildRowWithShifts(
           for (let d = s0; d < end; d++) {
             const deficit = minPer[sh] - cnt[sh][d]
             // urgency: thiếu hụt vượt quá nguồn cung kỳ vọng từ người xây sau = phải trám NGAY
-            if (deficit > 0) sc += 5 + Math.max(0, deficit - futPerShiftOf(sh)) * 14
+            if (deficit > 0) sc += 5 + Math.max(0, deficit - futPerShiftOf(sh, d)) * 14
             else sc -= 5
           }
           if (!spec && (L === 3 || L === 4)) sc += 2
@@ -1309,7 +1323,7 @@ function buildRowWithShifts(
           } else if (!needsQuota) {
             sc -= selfCnt[sh] * 0.5
           }
-          choices.push({ g, L, sh, sc, small: spec?.small ?? false })
+          choices.push({ g, L, sh, sc, small: spec?.small ?? false, cont })
         }
       }
     }
@@ -1321,7 +1335,7 @@ function buildRowWithShifts(
     const tryN = Math.min(choices.length, 4)
     let solved = false
     for (let i = 0; i < tryN && !solved; i++) {
-      const { g, L, sh, sc, small } = choices[i]
+      const { g, L, sh, sc, small, cont } = choices[i]
       const s0 = p + g
       for (let d = s0; d < s0 + L; d++) {
         row[d] = sh
@@ -1329,7 +1343,7 @@ function buildRowWithShifts(
       }
       selfCnt[sh] += L
       if (small) usedSmall.add(sh)
-      solved = dfs(s0 + L, rem - L, blkIdx + 1, usedSmall, score + sc)
+      solved = dfs(s0 + L, rem - L, cont ? blkIdx : blkIdx + 1, usedSmall, score + sc)
       if (small && !solved) usedSmall.delete(sh)
       if (!solved) {
         selfCnt[sh] -= L
@@ -1376,17 +1390,39 @@ export function buildIntegrated(
     restMin: input.restMin,
     restMax: input.restMax,
   }
+  // người có chuỗi dở từ tháng trước xây SAU (ngày 1 của họ chỉ có 2 lựa chọn: nghỉ hoặc nối ca)
+  // → lúc xây đã thấy rõ ngày 1 còn thiếu ca nào để nối đúng ca đó
+  order.sort((a, b) => (employees[a].carry_in ? 1 : 0) - (employees[b].carry_in ? 1 : 0))
   const fairShare = computeFairShare(employees, targets, D, minPerShift)
   let remainingSupply = order.reduce((s, i) => s + targets[i], 0)
+  const built = new Set<number>()
+  // nguồn cung kỳ vọng ngày 1 theo ca từ những người CHƯA xây
+  const future0 = (): Record<WorkShift, number> => {
+    const f: Record<WorkShift, number> = { S1: 0, S2: 0, S3: 0 }
+    const perDay = Math.max(1, needPerDay(minPerShift))
+    employees.forEach((x, k) => {
+      if (built.has(k) || x.days_off.includes(1)) return
+      const c = x.carry_in
+      if (c) {
+        if (c.run < input.streakMax) f[c.shift] += 0.6
+      } else {
+        for (const sh of WORK_SHIFTS) f[sh] += ((targets[k] / D) * minPerShift[sh]) / perDay
+      }
+    })
+    return f
+  }
   for (const i of order) {
     remainingSupply -= targets[i]
     const futureExpect = remainingSupply / D
     const e = employees[i]
+    built.add(i)
+    const f0 = future0()
     // xây xuôi hoặc ngược tháng (mirror) — đối xứng hóa khả năng với tới 2 biên
-    const mirror = rng() < 0.5
+    // có chuỗi dở từ tháng trước → chỉ xây xuôi (carry-in neo ở ngày 1)
+    const mirror = !e.carry_in && rng() < 0.5
     let row: Shift[] | null
     if (!mirror) {
-      row = buildRowWithShifts(e, D, targets[i], cnt, minPerShift, opts, rng, futureExpect, fairShare[i])
+      row = buildRowWithShifts(e, D, targets[i], cnt, minPerShift, opts, rng, futureExpect, fairShare[i], f0)
     } else {
       const eM = { ...e, days_off: e.days_off.map((x) => D + 1 - x) }
       const cntM: Record<WorkShift, number[]> = {
@@ -1464,7 +1500,7 @@ export function lnsRefine(
   const fairShare = computeFairShare(employees, targets, D, minPerShift)
   const buildOne = (i: number): Shift[] | null => {
     const e = employees[i]
-    if (rng() < 0.5) {
+    if (e.carry_in || rng() < 0.5) {
       return buildRowWithShifts(e, D, targets[i], cnt, minPerShift, opts, rng, 0, fairShare[i])
     }
     const eM = { ...e, days_off: e.days_off.map((x) => D + 1 - x) }
@@ -1485,6 +1521,7 @@ export function lnsRefine(
   // hàng có hợp lệ đầy đủ không (pattern + cùng ca ngày liền kề + cấm ca + nghỉ cố định)
   const rowValid = (row: Shift[], e: Employee): boolean => {
     if (!patternValid(row.map((s) => s !== 'OFF'), e, input)) return false
+    if (e.carry_in && row[0] !== 'OFF' && row[0] !== e.carry_in.shift) return false
     for (let d = 0; d < D; d++) {
       const s = row[d]
       if (s === 'OFF') continue
@@ -1552,8 +1589,40 @@ export function lnsRefine(
     return moved
   }
 
+  // vá chỗ nối với tháng trước: ngày 1 thiếu ca X → người đang dở chuỗi X (đang nghỉ ngày 1)
+  // xây lại hàng với yêu cầu nối tiếp ca X; nhận khi tổng thiếu hụt giảm
+  const boundaryPass = (): boolean => {
+    let moved = false
+    for (const sh of WORK_SHIFTS) {
+      if (cnt[sh][0] >= minPerShift[sh]) continue
+      for (const i of shuffled(employees.map((_, x) => x), rng)) {
+        if (cnt[sh][0] >= minPerShift[sh]) break
+        const e = employees[i]
+        const c = e.carry_in
+        if (!c || c.shift !== sh || c.run >= input.streakMax || rows[i][0] !== 'OFF' || e.days_off.includes(1)) continue
+        const before = deficitTotal()
+        const old = rows[i]
+        applyRow(old, -1)
+        const cand = buildRowWithShifts(e, D, targets[i], cnt, minPerShift, { ...opts, forceCont: true }, rng, 0, fairShare[i])
+        if (cand && cand[0] === sh && cand.filter((x) => x !== 'OFF').length >= targets[i] && rowValid(cand, e)) {
+          applyRow(cand, 1)
+          rows[i] = cand
+          if (deficitTotal() < before) {
+            moved = true
+            continue
+          }
+          applyRow(cand, -1)
+          rows[i] = old
+        }
+        applyRow(old, 1)
+      }
+    }
+    return moved
+  }
+
   let sideways = 0
   for (let round = 0; round < 25 && deficitTotal() > 0; round++) {
+    boundaryPass()
     while (microMove()) {
       /* dồn hết các nước đi trực tiếp trước khi rebuild */
     }
@@ -1654,7 +1723,7 @@ export function fairnessLns(
   const fairShare = computeFairShare(employees, targets, D, minPerShift)
   const buildOne = (i: number): Shift[] | null => {
     const e = employees[i]
-    if (rng() < 0.5) {
+    if (e.carry_in || rng() < 0.5) {
       return buildRowWithShifts(e, D, targets[i], cnt, minPerShift, opts, rng, 0, fairShare[i])
     }
     const eM = { ...e, days_off: e.days_off.map((x) => D + 1 - x) }
@@ -1719,6 +1788,7 @@ export function fairnessLns(
         streakMin: input.streakMin,
         streakMax: input.streakMax,
         restMax: input.restMax,
+        prevTail: input.prevTail,
       }).length === 0
     )
   }
@@ -1833,7 +1903,7 @@ function buildAllPatterns(
           [...splitLens(quota, 4, input.streakMin, input.streakMax), ...splitLens(rem, 3, input.streakMin, input.streakMax)],
           rng,
         )
-        const candidate = buildPattern(D, targets[i], new Set(e.days_off), nightDeficit, { ...baseOpts, fixedLens: lens }, rng, true)
+        const candidate = buildPattern(D, targets[i], new Set(e.days_off), nightDeficit, { ...baseOpts, fixedLens: lens, carryRun: e.carry_in?.run }, rng, true)
         if (candidate && candidate.filter(Boolean).length === targets[i] && designable(candidate, quota)) {
           p = candidate
         }
@@ -1864,7 +1934,7 @@ function buildAllPatterns(
       }
     }
     if (!p) {
-      p = buildPattern(D, targets[i], new Set(e.days_off), deficit, baseOpts, rng, e.prefer_night)
+      p = buildPattern(D, targets[i], new Set(e.days_off), deficit, { ...baseOpts, carryRun: e.carry_in?.run }, rng, e.prefer_night)
     }
     if (!p) return null
     patterns[i] = p
@@ -2057,12 +2127,14 @@ function patternValid(p: boolean[], e: Employee, input: SolverInput): boolean {
   const D = input.daysInMonth
   const offSet = new Set(e.days_off)
   for (const d of e.days_off) if (p[d - 1]) return false
+  const carryRun = e.carry_in?.run ?? 0
   let d = 0
   while (d < D) {
     const w = p[d]
     let end = d
     while (end < D && p[end] === w) end++
-    const len = end - d
+    // chuỗi đầu tháng nối tiếp chuỗi tháng trước
+    const len = end - d + (d === 0 && w ? carryRun : 0)
     const edge = d === 0 || end === D
     if (w) {
       if (len > input.streakMax) return false
@@ -2097,7 +2169,14 @@ export function solve(input: SolverInput): SolverResult {
     max_shifts_per_month: Math.min(L, Math.ceil((e.max_shifts_per_month * L) / D)),
     min_night_shifts: e.prefer_night ? Math.min(L, Math.floor((e.min_night_shifts * L) / D)) : 0,
   }))
-  const sub = solveMonth({ ...input, employees: subEmployees, daysInMonth: L, range: undefined, base: undefined })
+  // chỗ nối đầu khoảng: các ngày trước `from` (trong lịch hiện có) đóng vai "cuối tháng trước"
+  const subTail: Record<string, Shift[]> = {}
+  for (const e of employees) {
+    const before = (base?.[e.id] ?? []).slice(0, from - 1)
+    const tail = [...(input.prevTail?.[e.id] ?? []), ...before]
+    if (tail.length > 0) subTail[e.id] = tail
+  }
+  const sub = solveMonth({ ...input, employees: subEmployees, daysInMonth: L, range: undefined, base: undefined, prevTail: subTail })
 
   const matrix: ScheduleMatrix = {}
   for (const e of employees) {
@@ -2116,13 +2195,26 @@ export function solve(input: SolverInput): SolverResult {
     streakMin: input.streakMin,
     streakMax: input.streakMax,
     restMax: input.restMax,
+    prevTail: input.prevTail,
     // ngoài khoảng có thể là OFF (chưa có lịch) → không chấm cân bằng cả tháng
     skipBalance: !base,
   })
   return { ok: violations.length === 0 && sub.conflicts.length === 0, matrix, violations, conflicts: sub.conflicts }
 }
 
-function solveMonth(input: SolverInput): SolverResult {
+function solveMonth(rawInput: SolverInput): SolverResult {
+  // gắn carry-in (chuỗi dở từ tháng trước) vào từng người; chuỗi đã đủ dài → ngày 1 bắt buộc nghỉ
+  const input: SolverInput = {
+    ...rawInput,
+    employees: rawInput.employees.map((e) => {
+      const carry = carryOf(rawInput.prevTail?.[e.id])
+      const daysOff =
+        carry && carry.run >= rawInput.streakMax && !e.days_off.includes(1)
+          ? [1, ...e.days_off].sort((a, b) => a - b)
+          : e.days_off
+      return { ...e, carry_in: carry, days_off: daysOff }
+    }),
+  }
   const { employees, daysInMonth: D, minPerShift } = input
   const conflicts = diagnose(input)
   const rng = mulberry32(input.seed || 1)
@@ -2200,6 +2292,7 @@ function solveMonth(input: SolverInput): SolverResult {
       streakMin: input.streakMin,
       streakMax: input.streakMax,
       restMax: input.restMax,
+      prevTail: input.prevTail,
     })
     // lịch đã hợp lệ → san đều ca bằng hoán đổi đoạn lịch (giữ nguyên độ phủ & cấu trúc block)
     if (violations.length === 0 && fairnessOf(matrix).hard > 0) {

@@ -3,8 +3,15 @@ import { solve } from './solver'
 import { SEED_EMPLOYEES } from '../seed'
 import type { ScheduleMatrix, Shift } from '../types'
 
+// lịch cũ hợp lệ về chuỗi: mỗi người 4 ngày một ca rồi nghỉ 1 ngày, lệch pha & khác ca giữa các người
+// (chỗ nối với khoảng xếp lại được solver tôn trọng: ngày đầu khoảng phải nghỉ hoặc cùng ca với ngày trước đó)
 const base = (): ScheduleMatrix =>
-  Object.fromEntries(SEED_EMPLOYEES.map((e) => [e.id, new Array<Shift>(31).fill('S1')]))
+  Object.fromEntries(
+    SEED_EMPLOYEES.map((e, i) => [
+      e.id,
+      Array.from({ length: 31 }, (_, d): Shift => ((d + i) % 5 === 4 ? 'OFF' : (['S1', 'S2', 'S3'] as const)[i % 3])),
+    ]),
+  )
 
 describe('solver — xếp theo khoảng ngày', () => {
   it('chỉ đổi các ngày trong khoảng, ngày ngoài khoảng giữ nguyên lịch cũ', () => {
@@ -27,7 +34,7 @@ describe('solver — xếp theo khoảng ngày', () => {
       const row = r.matrix[e.id]
       expect(row).toHaveLength(31)
       for (let d = 0; d < 31; d++) {
-        if (d < 9 || d > 19) expect(row[d]).toBe('S1')
+        if (d < 9 || d > 19) expect(row[d]).toBe(old[e.id][d])
       }
     }
     // trong khoảng: mỗi ngày đủ ≥ 2 người / ca

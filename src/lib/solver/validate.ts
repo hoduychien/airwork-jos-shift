@@ -5,7 +5,7 @@ import type {
   Shift,
   Violation,
 } from '../types'
-import { WORK_SHIFTS } from '../types'
+import { WORK_SHIFTS, carryOf } from '../types'
 
 export interface ValidateOptions {
   employees: Employee[]
@@ -18,6 +18,8 @@ export interface ValidateOptions {
   restMax: number
   /** bỏ qua kiểm tra cân bằng tổng ca (dùng khi đang chỉnh tay dở) */
   skipBalance?: boolean
+  /** vài ngày cuối tháng trước của từng người — kiểm tra chỗ nối giữa 2 tháng */
+  prevTail?: Record<string, Shift[]>
 }
 
 const SHIFT_VI: Record<Shift, string> = {
@@ -41,13 +43,40 @@ export function restHoursBetween(prev: Shift, next: Shift): number {
  */
 export function validateMatrix(opts: ValidateOptions): Violation[] {
   // restMax không dùng ở đây nữa — nghỉ dài là hợp lệ, restMax chỉ định hướng solver
-  const { employees, matrix, daysInMonth: D, minPerShift, streakMin, streakMax } = opts
+  const { employees, matrix, daysInMonth: D, minPerShift, streakMin, streakMax, prevTail } = opts
   const out: Violation[] = []
 
   for (const emp of employees) {
     const row = matrix[emp.id]
     if (!row) continue
     const offSet = new Set(emp.days_off)
+
+    // 0) nối với tháng trước: ngày cuối tháng trước → ngày 1 phải cùng ca (hoặc nghỉ),
+    //    và chuỗi làm kéo dài qua tháng không được vượt streakMax
+    const carry = carryOf(prevTail?.[emp.id])
+    if (carry && row[0] !== 'OFF') {
+      if (row[0] !== carry.shift) {
+        const rest = restHoursBetween(carry.shift, row[0])
+        out.push({
+          type: 'adjacent-switch',
+          employee_id: emp.id,
+          day: 1,
+          shift: row[0],
+          message: `${emp.name}: cuối tháng trước làm ${carry.shift}, ngày 1 làm ${row[0]} — ${rest < 16 ? `chỉ nghỉ ${rest}h (< 16h)` : 'đổi ca mà không có ngày nghỉ đệm'}. Hai ngày làm liên tiếp phải cùng một ca.`,
+        })
+      } else {
+        let k = 0
+        while (k < D && row[k] === carry.shift) k++
+        if (carry.run + k > streakMax) {
+          out.push({
+            type: 'streak-too-long',
+            employee_id: emp.id,
+            day: 1,
+            message: `${emp.name}: làm ${carry.run + k} ngày liên tục nối từ tháng trước (${carry.run} ngày cuối tháng trước + ${k} ngày đầu tháng) — vượt tối đa ${streakMax} ngày.`,
+          })
+        }
+      }
+    }
 
     // 1) chuyển ca ngày liền kề phải cùng ca (đảm bảo nghỉ >= 16h)
     for (let d = 0; d < D - 1; d++) {
@@ -78,7 +107,8 @@ export function validateMatrix(opts: ValidateOptions): Violation[] {
       const len = end - d
       const touchesEdge = d === 0 || end === D
       if (isWork) {
-        if (len > streakMax) {
+        // chuỗi đầu tháng nối từ tháng trước đã được chấm ở mục 0
+        if (len > streakMax && !(d === 0 && carry && row[0] === carry.shift)) {
           out.push({
             type: 'streak-too-long',
             employee_id: emp.id,

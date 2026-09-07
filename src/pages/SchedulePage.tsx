@@ -15,7 +15,7 @@ import { store, type StoredSchedule } from '../lib/store'
 import { backupFilename, buildBackup, parseBackup, planRestore } from '../lib/backup'
 import { validateMatrix, violationCellMap } from '../lib/solver/validate'
 import type { Employee, ScheduleMatrix, Settings, Shift } from '../lib/types'
-import { DEFAULT_SETTINGS, WORK_SHIFTS, applyMonthData, daysInMonth, employeesInMonth, isPastMonth, perShiftLabel } from '../lib/types'
+import { DEFAULT_SETTINGS, WORK_SHIFTS, applyMonthData, daysInMonth, employeesInMonth, isPastMonth, perShiftLabel, prevTailOf } from '../lib/types'
 import { useAuth } from '../lib/AuthContext'
 import { useFeedback } from '../components/Feedback'
 import { swappedCellTips, type SwapRequest } from '../lib/swap'
@@ -38,6 +38,10 @@ export default function SchedulePage() {
   const [nextMatrix, setNextMatrix] = useState<ScheduleMatrix | null>(null)
   const nextMonth = month === 12 ? 1 : month + 1
   const nextYear = month === 12 ? year + 1 : year
+  // vài ngày cuối tháng trước — để ca ngày 1 nối đúng (không đổi ca sát nhau, không kéo chuỗi quá dài)
+  const [prevTail, setPrevTail] = useState<Record<string, Shift[]> | undefined>(undefined)
+  const prevMonth = month === 1 ? 12 : month - 1
+  const prevYear = month === 1 ? year - 1 : year
   const nextPreview = useMemo(
     () => ({ month: nextMonth, year: nextYear, matrix: nextMatrix }),
     [nextMonth, nextYear, nextMatrix],
@@ -87,7 +91,7 @@ export default function SchedulePage() {
     async (mode: 'hard' | 'soft' = 'hard') => {
       setLoading(mode)
       try {
-        const [emps, sets, dayoffs, prefs, sched, swapList, nextSched] = await Promise.all([
+        const [emps, sets, dayoffs, prefs, sched, swapList, nextSched, prevSched] = await Promise.all([
           store.listEmployees(),
           store.getSettings(),
           store.getDayOffs(month, year),
@@ -95,6 +99,7 @@ export default function SchedulePage() {
           store.getSchedule(month, year),
           store.listSwapRequests(month, year).catch(() => [] as SwapRequest[]),
           store.getSchedule(nextMonth, nextYear).catch(() => null),
+          store.getSchedule(prevMonth, prevYear).catch(() => null),
         ])
         // ràng buộc ca (ưu tiên đêm, cấm ca, tối đa) là thiết lập THEO THÁNG
         // chỉ người có làm trong tháng này (theo ngày vào/nghỉ việc) mới có dòng trên lịch
@@ -106,12 +111,13 @@ export default function SchedulePage() {
         // thành viên chỉ xem lịch đã chốt; bản nháp chỉ admin thấy
         setSchedule(sched && (isAdmin || sched.status === 'published') ? sched : null)
         setNextMatrix(nextSched && (isAdmin || nextSched.status === 'published') ? nextSched.matrix : null)
+        setPrevTail(prevSched ? prevTailOf(prevSched.matrix) : undefined)
         setConflicts([])
       } finally {
         setLoading(null)
       }
     },
-    [month, year, nextMonth, nextYear, isAdmin],
+    [month, year, nextMonth, nextYear, prevMonth, prevYear, isAdmin],
   )
 
   useEffect(() => {
@@ -156,8 +162,9 @@ export default function SchedulePage() {
             streakMax: settings.streak_max,
             restMax: settings.rest_max,
             skipBalance: !schedule,
+            prevTail,
           }),
-    [employees, matrix, D, settings, schedule],
+    [employees, matrix, D, settings, schedule, prevTail],
   )
   const violationMap = useMemo(() => violationCellMap(violations, employees, matrix), [violations, employees, matrix])
 
@@ -203,6 +210,7 @@ export default function SchedulePage() {
       seed: seedRef.current,
       range: dayRange ?? undefined,
       base: dayRange ? schedule?.matrix : undefined,
+      prevTail,
     })
     setConflicts(result.conflicts)
     setSaving(true)
